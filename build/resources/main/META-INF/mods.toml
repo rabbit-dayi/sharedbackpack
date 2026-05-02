@@ -1,0 +1,17 @@
+modLoader="javafml"
+loaderVersion="[1,)"
+license="MIT"
+
+[[mods]]
+modId="sharedbackpack"
+version="1.0.0"
+displayName="Shared Backpack"
+authors="SharedBackpack Dev"
+description="Team-shared backpack with SQLite storage, pinyin search, and multi-page GUI"
+
+[[dependencies.sharedbackpack]]
+modId="forge"
+mandatory=true
+versionRange="[47.4.10,)"
+ordering="NONE"
+side="BOTH"
