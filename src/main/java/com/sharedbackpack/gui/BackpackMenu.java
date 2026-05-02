@@ -14,7 +14,6 @@ import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.items.ItemStackHandler;
-import net.minecraftforge.network.NetworkHooks;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -26,8 +25,6 @@ public class BackpackMenu extends AbstractContainerMenu {
     private final int maxPages;
     private final String teamId;
     private final ServerPlayer player;
-
-    public static MenuType<BackpackMenu> TYPE;
 
     public BackpackMenu(int windowId, Inventory playerInv, FriendlyByteBuf buf) {
         this(windowId, playerInv, buf.readUtf(), buf.readInt(), buf.readInt());
@@ -41,30 +38,9 @@ public class BackpackMenu extends AbstractContainerMenu {
         this.player = (ServerPlayer) playerInv.player;
         this.handler = new ItemStackHandler(SLOTS_PER_PAGE);
 
-        int startSlot = page * SLOTS_PER_PAGE;
-        List<DatabaseManager.BackpackItem> items = SharedBackpackMod.database.getItems(teamId);
-        for (DatabaseManager.BackpackItem item : items) {
-            if (item.slot >= startSlot && item.slot < startSlot + SLOTS_PER_PAGE) {
-                ItemStack stack = SharedBackpack.toItemStack(item);
-                // Add lore with metadata
-                if (item.placedBy != null) {
-                    List<net.minecraft.network.chat.Component> lore = new ArrayList<>();
-                    lore.add(net.minecraft.network.chat.Component.literal("§7放入者: " + item.placedBy));
-                    lore.add(net.minecraft.network.chat.Component.literal("§7时间: " + (item.placedTime != null ? item.placedTime : "未知")));
-                    lore.add(net.minecraft.network.chat.Component.literal("§7数量: " + item.placedCount));
-                    if (item.lastModifiedBy != null) {
-                        lore.add(net.minecraft.network.chat.Component.literal("§7最后修改: " + item.lastModifiedBy));
-                    }
-                    // Store metadata in NBT for display
-                    net.minecraft.nbt.CompoundTag tag = stack.getOrCreateTag();
-                    tag.putString("placedBy", item.placedBy);
-                    tag.putString("placedTime", item.placedTime != null ? item.placedTime : "");
-                    tag.putInt("placedCount", item.placedCount);
-                }
-                handler.setStackInSlot(item.slot - startSlot, stack);
-            }
-        }
-
+        loadItems();
+        
+        // Backpack slots
         for (int i = 0; i < SLOTS_PER_PAGE; i++) {
             final int slot = i;
             addSlot(new Slot(new Container() {
@@ -88,11 +64,15 @@ public class BackpackMenu extends AbstractContainerMenu {
                 public boolean mayPickup(Player player) { return true; }
                 @Override
                 public void onTake(Player player, ItemStack stack) {
-                    // Will be handled by server
+                    if (player instanceof ServerPlayer sp) {
+                        int realSlot = page * SLOTS_PER_PAGE + slot;
+                        SharedBackpackMod.database.removeItem(teamId, realSlot, stack.getCount());
+                    }
                 }
             });
         }
 
+        // Player inventory
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 9; col++) {
                 addSlot(new Slot(playerInv, col + row * 9 + 9, 8 + col * 18, 140 + row * 18));
@@ -103,27 +83,57 @@ public class BackpackMenu extends AbstractContainerMenu {
         }
     }
 
+    private void loadItems() {
+        int startSlot = page * SLOTS_PER_PAGE;
+        List<DatabaseManager.BackpackItem> items = SharedBackpackMod.database.getItems(teamId);
+        for (DatabaseManager.BackpackItem item : items) {
+            if (item.slot >= startSlot && item.slot < startSlot + SLOTS_PER_PAGE) {
+                ItemStack stack = SharedBackpack.toItemStack(item);
+                // Store metadata in NBT for tooltip
+                if (item.placedBy != null) {
+                    net.minecraft.nbt.CompoundTag tag = stack.getOrCreateTag();
+                    tag.putString("placedBy", item.placedBy);
+                    if (item.placedTime != null) tag.putString("placedTime", item.placedTime);
+                    tag.putInt("placedCount", item.placedCount);
+                    if (item.lastModifiedBy != null) tag.putString("lastModifiedBy", item.lastModifiedBy);
+                }
+                handler.setStackInSlot(item.slot - startSlot, stack);
+            }
+        }
+    }
+
     public static void openForPlayer(ServerPlayer player, String search) {
         String teamId = TeamResolver.resolvePrimaryTeam(player);
         int maxPages = SharedBackpackMod.database.getMaxPages(teamId);
-        NetworkHooks.openScreen(player, new net.minecraft.world.MenuProvider() {
+        net.minecraftforge.network.NetworkHooks.openScreen(player, new net.minecraft.world.MenuProvider() {
             @Override
-            public AbstractContainerMenu createMenu(int windowId, Inventory inv, Player p) {
-                return new BackpackMenu(windowId, inv, teamId, 0, maxPages);
+            public AbstractContainerMenu createMenu(int id, Inventory inv, Player p) {
+                return new BackpackMenu(id, inv, teamId, 0, maxPages);
             }
             @Override
             public net.minecraft.network.chat.Component getDisplayName() {
                 return net.minecraft.network.chat.Component.literal("共享背包 - " + teamId);
             }
-        }, buf -> {
-            buf.writeUtf(teamId);
-            buf.writeInt(0);
-            buf.writeInt(maxPages);
         });
     }
 
     @Override
     public ItemStack quickMoveStack(Player player, int index) {
+        if (index >= 0 && index < SLOTS_PER_PAGE) {
+            Slot slot = this.getSlot(index);
+            if (slot != null && slot.hasItem()) {
+                ItemStack stack = slot.getItem().copy();
+                if (player instanceof ServerPlayer sp) {
+                    boolean added = player.getInventory().add(stack);
+                    if (added) {
+                        slot.set(ItemStack.EMPTY);
+                        SharedBackpackMod.database.removeItem(teamId, 
+                            page * SLOTS_PER_PAGE + index, stack.getCount());
+                        return stack;
+                    }
+                }
+            }
+        }
         return ItemStack.EMPTY;
     }
 
@@ -132,28 +142,32 @@ public class BackpackMenu extends AbstractContainerMenu {
         return true;
     }
 
-    public static boolean handleTake(ServerPlayer player, int slot, int count, String teamId) {
-        return SharedBackpackMod.database.removeItem(teamId, slot, count);
+    public String getTeamId() { return teamId; }
+    public int getCurrentPage() { return page; }
+    public int getMaxPages() { return maxPages; }
+    
+    public boolean canUpgrade() {
+        for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
+            ItemStack stack = player.getInventory().getItem(i);
+            if (stack.getItem() == net.minecraft.world.item.Items.DIAMOND && stack.getCount() >= 1) {
+                return true;
+            }
+        }
+        return false;
     }
-
-    @Override
-    public void clicked(int slotId, int button, net.minecraft.world.inventory.ClickType clickType, Player player) {
-        if (slotId >= 0 && slotId < SLOTS_PER_PAGE) {
-            ItemStack stack = handler.getStackInSlot(slotId);
-            if (!stack.isEmpty() && player instanceof ServerPlayer) {
-                int takeCount = 1;
-                if (button == 1) { // Right click - take full stack
-                    takeCount = Math.min(stack.getMaxStackSize(), stack.getCount());
-                }
-                if (SharedBackpackMod.database.removeItem(teamId, 
-                    page * SLOTS_PER_PAGE + slotId, takeCount)) {
-                    ItemStack taken = stack.copy();
-                    taken.setCount(takeCount);
-                    player.getInventory().add(taken);
-                    handler.setStackInSlot(slotId, stack.isEmpty() ? ItemStack.EMPTY : stack);
+    
+    public boolean upgradeWithDiamond() {
+        if (!canUpgrade()) return false;
+        for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
+            ItemStack stack = player.getInventory().getItem(i);
+            if (stack.getItem() == net.minecraft.world.item.Items.DIAMOND && stack.getCount() >= 1) {
+                stack.shrink(1);
+                if (SharedBackpackMod.database.upgradePages(teamId, 1)) {
+                    player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§a背包已升级，增加1页容量！"));
+                    return true;
                 }
             }
         }
-        super.clicked(slotId, button, clickType, player);
+        return false;
     }
 }

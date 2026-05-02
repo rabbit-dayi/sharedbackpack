@@ -127,7 +127,6 @@ Conflicting propagated mapping for net/minecraft/world/entity/LivingEntity/lambd
 Conflicting propagated mapping for com/sharedbackpack/commands/CCommand$1/createMenu(ILnet/minecraft/world/entity/player/Inventory;Lnet/minecraft/world/entity/player/Player;)Lnet/minecraft/world/inventory/AbstractContainerMenu; from net/minecraft/world/inventory/MenuConstructor/createMenu(ILnet/minecraft/world/entity/player/Inventory;Lnet/minecraft/world/entity/player/Player;)Lnet/minecraft/world/inventory/AbstractContainerMenu;: createMenu -> m_7208_
 Conflicting propagated mapping for com/sharedbackpack/commands/CCommand$1/getDisplayName()Lnet/minecraft/network/chat/Component; from net/minecraft/world/MenuProvider/getDisplayName()Lnet/minecraft/network/chat/Component;: getDisplayName -> m_5446_
 Conflicting propagated mapping for com/sharedbackpack/gui/BackpackMenu/stillValid(Lnet/minecraft/world/entity/player/Player;)Z from net/minecraft/world/inventory/AbstractContainerMenu/stillValid(Lnet/minecraft/world/entity/player/Player;)Z: stillValid -> m_6875_
-Conflicting propagated mapping for com/sharedbackpack/gui/BackpackMenu/clicked(IILnet/minecraft/world/inventory/ClickType;Lnet/minecraft/world/entity/player/Player;)V from net/minecraft/world/inventory/AbstractContainerMenu/clicked(IILnet/minecraft/world/inventory/ClickType;Lnet/minecraft/world/entity/player/Player;)V: clicked -> m_150399_
 Conflicting propagated mapping for com/sharedbackpack/gui/BackpackMenu/quickMoveStack(Lnet/minecraft/world/entity/player/Player;I)Lnet/minecraft/world/item/ItemStack; from net/minecraft/world/inventory/AbstractContainerMenu/quickMoveStack(Lnet/minecraft/world/entity/player/Player;I)Lnet/minecraft/world/item/ItemStack;: quickMoveStack -> m_7648_
 Conflicting propagated mapping for com/sharedbackpack/gui/BackpackSlot$1/getContainerSize()I from net/minecraft/world/Container/getContainerSize()I: getContainerSize -> m_6643_
 Conflicting propagated mapping for com/sharedbackpack/gui/BackpackSlot$1/setItem(ILnet/minecraft/world/item/ItemStack;)V from net/minecraft/world/Container/setItem(ILnet/minecraft/world/item/ItemStack;)V: setItem -> m_6836_
@@ -144,13 +143,13 @@ Conflicting propagated mapping for com/sharedbackpack/gui/BackpackMenu$1/getCont
 Conflicting propagated mapping for com/sharedbackpack/gui/BackpackMenu$1/setItem(ILnet/minecraft/world/item/ItemStack;)V from net/minecraft/world/Container/setItem(ILnet/minecraft/world/item/ItemStack;)V: setItem -> m_6836_
 Conflicting propagated mapping for com/sharedbackpack/gui/BackpackMenu$1/removeItem(II)Lnet/minecraft/world/item/ItemStack; from net/minecraft/world/Container/removeItem(II)Lnet/minecraft/world/item/ItemStack;: removeItem -> m_7407_
 Conflicting propagated mapping for com/sharedbackpack/gui/BackpackMenu$1/getItem(I)Lnet/minecraft/world/item/ItemStack; from net/minecraft/world/Container/getItem(I)Lnet/minecraft/world/item/ItemStack;: getItem -> m_8020_
+Conflicting propagated mapping for com/sharedbackpack/gui/BackpackMenu$2/onTake(Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/item/ItemStack;)V from net/minecraft/world/inventory/Slot/onTake(Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/item/ItemStack;)V: onTake -> m_142406_
 Conflicting propagated mapping for com/sharedbackpack/gui/BackpackMenu$1/clearContent()V from net/minecraft/world/Clearable/clearContent()V: clearContent -> m_6211_
 Conflicting propagated mapping for com/sharedbackpack/gui/BackpackMenu$1/isEmpty()Z from net/minecraft/world/Container/isEmpty()Z: isEmpty -> m_7983_
+Conflicting propagated mapping for com/sharedbackpack/gui/BackpackMenu$2/mayPickup(Lnet/minecraft/world/entity/player/Player;)Z from net/minecraft/world/inventory/Slot/mayPickup(Lnet/minecraft/world/entity/player/Player;)Z: mayPickup -> m_8010_
 Conflicting propagated mapping for com/sharedbackpack/gui/BackpackMenu$1/setChanged()V from net/minecraft/world/Container/setChanged()V: setChanged -> m_6596_
 Conflicting propagated mapping for com/sharedbackpack/gui/BackpackMenu$1/removeItemNoUpdate(I)Lnet/minecraft/world/item/ItemStack; from net/minecraft/world/Container/removeItemNoUpdate(I)Lnet/minecraft/world/item/ItemStack;: removeItemNoUpdate -> m_8016_
 Conflicting propagated mapping for com/sharedbackpack/gui/BackpackMenu$1/stillValid(Lnet/minecraft/world/entity/player/Player;)Z from net/minecraft/world/Container/stillValid(Lnet/minecraft/world/entity/player/Player;)Z: stillValid -> m_6542_
-Conflicting propagated mapping for com/sharedbackpack/gui/BackpackMenu$2/onTake(Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/item/ItemStack;)V from net/minecraft/world/inventory/Slot/onTake(Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/item/ItemStack;)V: onTake -> m_142406_
-Conflicting propagated mapping for com/sharedbackpack/gui/BackpackMenu$2/mayPickup(Lnet/minecraft/world/entity/player/Player;)Z from net/minecraft/world/inventory/Slot/mayPickup(Lnet/minecraft/world/entity/player/Player;)Z: mayPickup -> m_8010_
 Conflicting propagated mapping for com/sharedbackpack/gui/BackpackMenu$3/createMenu(ILnet/minecraft/world/entity/player/Inventory;Lnet/minecraft/world/entity/player/Player;)Lnet/minecraft/world/inventory/AbstractContainerMenu; from net/minecraft/world/inventory/MenuConstructor/createMenu(ILnet/minecraft/world/entity/player/Inventory;Lnet/minecraft/world/entity/player/Player;)Lnet/minecraft/world/inventory/AbstractContainerMenu;: createMenu -> m_7208_
 Conflicting propagated mapping for com/sharedbackpack/gui/BackpackMenu$3/getDisplayName()Lnet/minecraft/network/chat/Component; from net/minecraft/world/MenuProvider/getDisplayName()Lnet/minecraft/network/chat/Component;: getDisplayName -> m_5446_
 Conflicting propagated mapping for com/sharedbackpack/gui/BackpackScreen/keyPressed(III)Z from net/minecraft/client/gui/screens/inventory/AbstractContainerScreen/keyPressed(III)Z: keyPressed -> m_7933_
@@ -168,8 +167,8 @@ Can't Find Class: org/graalvm/nativeimage/hosted/RuntimeClassInitialization
 Can't Find Class: org/graalvm/nativeimage/hosted/RuntimeResourceAccess
 Can't Find Class: org/graalvm/nativeimage/hosted/RuntimeJNIAccess
 Can't Find Class: org/slf4j/impl/StaticLoggerBinder
-Can't Find Class: org/slf4j/impl/StaticMDCBinder
 Can't Find Class: org/slf4j/impl/StaticMarkerBinder
+Can't Find Class: org/slf4j/impl/StaticMDCBinder
 Adding extras
 Sorting
 Writing Output: /opt/dayi/plant_bird/cc_mod/build/reobfJar/output.jar
