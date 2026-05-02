@@ -5,9 +5,7 @@ import com.sharedbackpack.commands.CCCommand;
 import com.sharedbackpack.database.DatabaseManager;
 import com.sharedbackpack.gui.BackpackMenu;
 import com.sharedbackpack.gui.BackpackScreen;
-import com.sharedbackpack.gui.MenuTypeRegistry;
 import com.sharedbackpack.network.NetworkHandler;
-import net.minecraft.client.gui.screens.MenuScreens;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.server.ServerStartingEvent;
@@ -27,14 +25,14 @@ public class SharedBackpackMod {
 
     public SharedBackpackMod() {
         MinecraftForge.EVENT_BUS.register(this);
-        MenuTypeRegistry.MENUS.register(FMLJavaModLoadingContext.get().getModEventBus());
+        MinecraftForge.EVENT_BUS.register(new com.sharedbackpack.gui.BackpackMenuHandler());
         FMLJavaModLoadingContext.get().getModEventBus().addListener(this::onClientSetup);
         NetworkHandler.register();
         LOGGER.info("Shared Backpack mod loaded");
     }
 
     private void onClientSetup(FMLClientSetupEvent event) {
-        // Menu registration will be done differently
+        // Screen registration handled by Forge
     }
 
     @SubscribeEvent

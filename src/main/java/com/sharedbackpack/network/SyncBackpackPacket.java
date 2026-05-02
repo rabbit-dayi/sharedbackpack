@@ -41,11 +41,6 @@ public class SyncBackpackPacket {
     }
 
     public void handle(Supplier<NetworkEvent.Context> ctx) {
-        ctx.get().enqueueWork(() -> {
-            if (ctx.get().getSender() != null) {
-                BackpackMenu.handleSync(this);
-            }
-        });
         ctx.get().setPacketHandled(true);
     }
 

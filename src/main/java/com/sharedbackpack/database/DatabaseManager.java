@@ -140,15 +140,18 @@ public class DatabaseManager {
                 .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
 
         try {
-            // First try to stack with existing slot (strict NBT comparison)
-            String findSql = "SELECT slot, count, placed_count FROM backpack_items WHERE team_id = ? AND item_id = ? AND nbt IS ?";
-            if (nbt != null) findSql = "SELECT slot, count, placed_count FROM backpack_items WHERE team_id = ? AND item_id = ? AND nbt = ?";
+            // First try to stack with existing slot (STRICT: must match item_id AND nbt exactly)
+            String findSql = "SELECT slot, count, placed_count FROM backpack_items WHERE team_id = ? AND item_id = ? AND ";
+            if (nbt != null) {
+                findSql += "nbt = ?";
+            } else {
+                findSql += "(nbt IS NULL OR nbt = '')";
+            }
             
             try (PreparedStatement ps = connection.prepareStatement(findSql)) {
                 ps.setString(1, teamId);
                 ps.setString(2, itemId);
                 if (nbt != null) ps.setString(3, nbt);
-                else ps.setNull(3, java.sql.Types.VARCHAR);
                 
                 ResultSet rs = ps.executeQuery();
                 while (rs.next()) {
