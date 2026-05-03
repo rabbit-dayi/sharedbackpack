@@ -47,6 +47,8 @@ public class BackpackMenu extends AbstractContainerMenu {
     private boolean showBoxMenu;
     private final Map<Integer, String> modMenuMap = new HashMap<>();
     private final Map<Integer, String> boxMenuMap = new HashMap<>();
+    private final long[] sortClicks = new long[3];
+    private int sortClickIdx;
     private int page;
     private boolean loading;
 
@@ -235,8 +237,10 @@ public class BackpackMenu extends AbstractContainerMenu {
         ItemStack ci = new ItemStack(Items.BOOK);
         ci.setHoverName(Component.literal("§e物品: " + dbTotal() + " 件"));
         handler.setStackInSlot(COUNT_SLOT, ci);
+        String displayTeam = teamId;
+        if (isBox && teamId.contains(":")) displayTeam = teamId.substring(teamId.lastIndexOf(':') + 1);
         ItemStack ti = new ItemStack(isBox ? Items.CHEST : Items.NAME_TAG);
-        ti.setHoverName(Component.literal("§a" + (isBox ? "盒子:" + teamId : "队伍: " + teamId) + " §7(点击管理盒子)"));
+        ti.setHoverName(Component.literal("§a" + (isBox ? "盒子:" + displayTeam + " §7(点击返回队伍)" : "队伍: " + displayTeam + " §7(点击管理盒子)")));
         handler.setStackInSlot(TEAM_SLOT, ti);
 
         // Mod/Box menu controls
@@ -345,7 +349,12 @@ public class BackpackMenu extends AbstractContainerMenu {
                 if (slotId == UPGRADE_SLOT) { doUpgrade(); return; }
                 if (slotId == SORT_SLOT) { doSort(); return; }
                 if (slotId == MOD_SLOT) { toggleModMenu(); return; }
-                if (slotId == TEAM_SLOT) { toggleBoxMenu(); return; }
+                if (slotId == TEAM_SLOT && isBox) {
+                    stashCarried();
+                    player.getServer().execute(() -> openTeam(player, searchFilter));
+                    return;
+                }
+                if (slotId == TEAM_SLOT && !isBox) { toggleBoxMenu(); return; }
             }
             return;
         }
@@ -387,7 +396,15 @@ public class BackpackMenu extends AbstractContainerMenu {
         player.sendSystemMessage(Component.literal("§c需要 1 个钻石来升级背包！"));
     }
 
-    private void doSort() { dbSort(); player.sendSystemMessage(Component.literal("§a物品已整理！")); refreshPage(); }
+    private void doSort() {
+        long now = System.currentTimeMillis();
+        sortClicks[sortClickIdx % 3] = now;
+        sortClickIdx++;
+        boolean triple = sortClickIdx >= 3 && (now - sortClicks[(sortClickIdx - 3) % 3]) < 1500;
+        dbSort();
+        player.sendSystemMessage(Component.literal(triple ? "§a全背包已整理！" : "§a物品已整理！"));
+        refreshPage();
+    }
 
     private void doCreateBox() {
         String owner = player.getStringUUID();
@@ -463,7 +480,9 @@ public class BackpackMenu extends AbstractContainerMenu {
         String tid = isBox ? (boxOwner != null ? boxOwner : player.getStringUUID()) : TeamResolver.resolvePrimaryTeam(player);
         int mp = isBox ? SharedBackpackMod.database.getBoxMaxPages(tid, tid) : SharedBackpackMod.database.getMaxPages(tid);
         int cp = Math.max(0, Math.min(page, mp - 1));
-        String title = unload ? "卸货" : (isBox ? "盒子: " + tid : "共享背包 - " + tid);
+        String displayName = tid;
+        if (isBox && tid.contains(":")) displayName = tid.substring(tid.lastIndexOf(':') + 1);
+        String title = unload ? "卸货" : (isBox ? "盒子: " + displayName : "共享背包 - " + tid);
         if (search != null && !search.isEmpty()) title += " 搜索:" + search;
         String ft = title; int fp = cp; boolean fw = unload; boolean fb = isBox; String fo = boxOwner;
         player.openMenu(new MenuProvider() {
