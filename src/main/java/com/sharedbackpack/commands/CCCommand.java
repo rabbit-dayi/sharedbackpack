@@ -75,6 +75,10 @@ public class CCCommand {
                 .then(Commands.literal("upgrade")
                     .then(Commands.argument("name", StringArgumentType.string())
                         .executes(ctx -> upgradeBox(ctx.getSource(), StringArgumentType.getString(ctx, "name"))))))
+            .then(Commands.literal("bind")
+                .executes(ctx -> bindItem(ctx.getSource())))
+            .then(Commands.literal("unbind")
+                .executes(ctx -> unbindItem(ctx.getSource())))
         );
     }
 
@@ -236,6 +240,28 @@ public class CCCommand {
         }
         SharedBackpackMod.database.upgradePages(name, 1);
         src.sendSuccess(() -> Component.literal("§a盒子 '" + name + "' 已升级"), false);
+        return 1;
+    }
+
+    private static int bindItem(CommandSourceStack src) {
+        if (!(src.getEntity() instanceof ServerPlayer player)) {
+            src.sendFailure(Component.literal("此命令只能由玩家使用")); return 0;
+        }
+        var stack = player.getMainHandItem();
+        if (stack.isEmpty()) {
+            src.sendFailure(Component.literal("请手持一个物品")); return 0;
+        }
+        BindManager.bind(player.getStringUUID(), stack);
+        src.sendSuccess(() -> Component.literal("§a已绑定 " + stack.getHoverName().getString() + " 为背包钥匙"), false);
+        return 1;
+    }
+
+    private static int unbindItem(CommandSourceStack src) {
+        if (!(src.getEntity() instanceof ServerPlayer player)) {
+            src.sendFailure(Component.literal("此命令只能由玩家使用")); return 0;
+        }
+        BindManager.unbind(player.getStringUUID());
+        src.sendSuccess(() -> Component.literal("§a已解绑，恢复默认胡萝卜"), false);
         return 1;
     }
 }

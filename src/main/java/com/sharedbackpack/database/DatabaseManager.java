@@ -451,6 +451,64 @@ public class DatabaseManager {
         }
     }
 
+    /** Sort only items within a page range, consolidating identical items */
+    public synchronized void sortPageItems(String teamId, int startSlot, int endSlot) {
+        if (!isReady()) return;
+        sortSlots("backpack_items", "team_id", teamId, startSlot, endSlot);
+    }
+
+    private void sortSlots(String table, String idCol, String idVal, int start, int end) {
+        try {
+            List<BackpackItem> items = new ArrayList<>();
+            String sel = "SELECT slot, item_id, count, nbt, placed_by, placed_time, placed_count, last_modified_by, last_modified_time FROM " + table + " WHERE " + idCol + " = ? AND slot >= ? AND slot < ? ORDER BY slot";
+            try (PreparedStatement ps = connection.prepareStatement(sel)) {
+                ps.setString(1, idVal); ps.setInt(2, start); ps.setInt(3, end);
+                ResultSet rs = ps.executeQuery();
+                while (rs.next()) items.add(new BackpackItem(rs.getInt("slot"), rs.getString("item_id"),
+                    rs.getInt("count"), rs.getString("nbt"), rs.getString("placed_by"),
+                    rs.getString("placed_time"), rs.getInt("placed_count"),
+                    rs.getString("last_modified_by"), rs.getString("last_modified_time")));
+            }
+            Map<String, BackpackItem> groups = new LinkedHashMap<>();
+            for (BackpackItem it : items) {
+                String key = it.itemId + "\0" + (it.nbt != null ? it.nbt : "");
+                BackpackItem ex = groups.get(key);
+                if (ex != null) {
+                    groups.put(key, new BackpackItem(0, it.itemId, ex.count + it.count, it.nbt,
+                        ex.placedBy, ex.placedTime, ex.placedCount + it.placedCount,
+                        it.lastModifiedBy, it.lastModifiedTime));
+                } else groups.put(key, it);
+            }
+            connection.setAutoCommit(false);
+            try (PreparedStatement d = connection.prepareStatement(
+                    "DELETE FROM " + table + " WHERE " + idCol + " = ? AND slot >= ? AND slot < ?")) {
+                d.setString(1, idVal); d.setInt(2, start); d.setInt(3, end); d.executeUpdate();
+            }
+            int slot = start;
+            String ins = "INSERT INTO " + table + " (" + idCol + ", item_id, count, slot, nbt, placed_by, placed_time, placed_count, last_modified_by, last_modified_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            try (PreparedStatement ps = connection.prepareStatement(ins)) {
+                for (BackpackItem it : groups.values()) {
+                    int rem = it.count;
+                    while (rem > 0 && slot < end) {
+                        int st = Math.min(rem, 64);
+                        ps.setString(1, idVal); ps.setString(2, it.itemId);
+                        ps.setInt(3, st); ps.setInt(4, slot); ps.setString(5, it.nbt);
+                        ps.setString(6, it.placedBy); ps.setString(7, it.placedTime);
+                        ps.setInt(8, it.placedCount); ps.setString(9, it.lastModifiedBy);
+                        ps.setString(10, it.lastModifiedTime); ps.addBatch();
+                        rem -= st; slot++;
+                    }
+                    if (rem > 0) break;
+                }
+                ps.executeBatch();
+            }
+            connection.commit(); connection.setAutoCommit(true);
+        } catch (SQLException e) {
+            SharedBackpackMod.LOGGER.error("Failed page sort", e);
+            try { connection.rollback(); connection.setAutoCommit(true); } catch (SQLException ignored) {}
+        }
+    }
+
     // ========== Player Box Methods ==========
 
     private int findEmptyBoxSlot(String owner, String box, int maxSlots) throws SQLException {
@@ -676,6 +734,59 @@ public class DatabaseManager {
             SharedBackpackMod.LOGGER.info("Sorted box {}/{}: {} groups, {} slots", owner, box, groups.size(), slot);
         } catch (SQLException e) {
             SharedBackpackMod.LOGGER.error("Failed sortBoxItems {}/{}", owner, box, e);
+            try { connection.rollback(); connection.setAutoCommit(true); } catch (SQLException ignored) {}
+        }
+    }
+
+    public synchronized void sortPageBoxItems(String owner, String box, int start) {
+        if (!isReady()) return;
+        int end = start + SLOTS_PER_PAGE;
+        try {
+            List<BackpackItem> items = new ArrayList<>();
+            try (PreparedStatement ps = connection.prepareStatement(
+                    "SELECT slot, item_id, count, nbt, placed_by, placed_time, placed_count, last_modified_by, last_modified_time FROM player_box_items WHERE owner_uuid=? AND box_name=? AND slot>=? AND slot<? ORDER BY slot")) {
+                ps.setString(1, owner); ps.setString(2, box); ps.setInt(3, start); ps.setInt(4, end);
+                ResultSet rs = ps.executeQuery();
+                while (rs.next()) items.add(new BackpackItem(rs.getInt("slot"), rs.getString("item_id"),
+                    rs.getInt("count"), rs.getString("nbt"), rs.getString("placed_by"),
+                    rs.getString("placed_time"), rs.getInt("placed_count"),
+                    rs.getString("last_modified_by"), rs.getString("last_modified_time")));
+            }
+            Map<String, BackpackItem> groups = new LinkedHashMap<>();
+            for (BackpackItem it : items) {
+                String key = it.itemId + "\0" + (it.nbt != null ? it.nbt : "");
+                BackpackItem ex = groups.get(key);
+                if (ex != null) groups.put(key, new BackpackItem(0, it.itemId, ex.count + it.count, it.nbt,
+                    ex.placedBy, ex.placedTime, ex.placedCount + it.placedCount,
+                    it.lastModifiedBy, it.lastModifiedTime));
+                else groups.put(key, it);
+            }
+            connection.setAutoCommit(false);
+            try (PreparedStatement d = connection.prepareStatement(
+                    "DELETE FROM player_box_items WHERE owner_uuid=? AND box_name=? AND slot>=? AND slot<?")) {
+                d.setString(1, owner); d.setString(2, box); d.setInt(3, start); d.setInt(4, end); d.executeUpdate();
+            }
+            int slot = start;
+            try (PreparedStatement ps = connection.prepareStatement(
+                    "INSERT INTO player_box_items (owner_uuid, box_name, item_id, count, slot, nbt, placed_by, placed_time, placed_count, last_modified_by, last_modified_time) VALUES (?,?,?,?,?,?,?,?,?,?,?)")) {
+                for (BackpackItem it : groups.values()) {
+                    int rem = it.count;
+                    while (rem > 0 && slot < end) {
+                        int st = Math.min(rem, 64);
+                        ps.setString(1, owner); ps.setString(2, box); ps.setString(3, it.itemId);
+                        ps.setInt(4, st); ps.setInt(5, slot); ps.setString(6, it.nbt);
+                        ps.setString(7, it.placedBy); ps.setString(8, it.placedTime);
+                        ps.setInt(9, it.placedCount); ps.setString(10, it.lastModifiedBy);
+                        ps.setString(11, it.lastModifiedTime); ps.addBatch();
+                        rem -= st; slot++;
+                    }
+                    if (rem > 0) break;
+                }
+                ps.executeBatch();
+            }
+            connection.commit(); connection.setAutoCommit(true);
+        } catch (SQLException e) {
+            SharedBackpackMod.LOGGER.error("Failed sortPageBoxItems", e);
             try { connection.rollback(); connection.setAutoCommit(true); } catch (SQLException ignored) {}
         }
     }
