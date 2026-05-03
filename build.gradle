@@ -38,6 +38,7 @@ repositories {
     mavenCentral()
     maven { url = 'https://maven.minecraftforge.net/' }
     maven { url = 'https://maven.neoforged.net/releases' }
+    maven { url = 'https://jitpack.io' }
 }
 
 configurations {
@@ -47,13 +48,25 @@ configurations {
 
 dependencies {
     minecraft 'net.minecraftforge:forge:1.20.1-47.4.10'
-    embed 'org.xerial:sqlite-jdbc:3.45.1.0'
+    embed('org.xerial:sqlite-jdbc:3.45.1.0') {
+        exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
+    embed('com.github.Towdium:PinIn:1.6.0') {
+        exclude group: 'it.unimi.dsi'
+    }
 }
 
 jar {
     from {
         configurations.embed.collect { it.isDirectory() ? it : zipTree(it) }
     }
+    // Exclude SLF4J classes to avoid Java module conflict with org.slf4j
+    exclude 'META-INF/maven/org.slf4j/**'
+    // Exclude Fastutil from PinIn to avoid module conflict
+    exclude 'it/unimi/**'
+    exclude 'META-INF/maven/it.unimi.dsi/**'
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+
     manifest {
         attributes(
                 'Specification-Title': 'sharedbackpack',
@@ -79,7 +92,7 @@ tasks.processResources {
             mod_license: 'MIT',
             mod_version: '1.0.0',
             mod_authors: 'SharedBackpack Dev',
-            mod_description: 'Team-shared backpack with SQLite storage, pinyin search, and multi-page GUI'
+            mod_description: 'Team-shared backpack with SQLite storage'
     ]
     inputs.properties replaceProperties
     filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) {

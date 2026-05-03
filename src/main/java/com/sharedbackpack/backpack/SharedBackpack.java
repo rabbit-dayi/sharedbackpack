@@ -14,7 +14,7 @@ import java.util.*;
 
 public class SharedBackpack {
 
-    public static final int SLOTS_PER_PAGE = 54;
+    public static final int SLOTS_PER_PAGE = 45;
 
     public static List<DatabaseManager.BackpackItem> getTeamItems(ServerPlayer player) {
         List<String> teams = TeamResolver.resolveTeams(player);
@@ -22,7 +22,7 @@ public class SharedBackpack {
         Map<String, DatabaseManager.BackpackItem> merged = new LinkedHashMap<>();
         for (String teamId : teams) {
             for (DatabaseManager.BackpackItem item : SharedBackpackMod.database.getItems(teamId)) {
-                String key = item.itemId + (item.nbt != null ? ":" + item.nbt.hashCode() : "");
+                String key = item.itemId + ":" + (item.nbt != null ? item.nbt : "null");
                 DatabaseManager.BackpackItem existing = merged.get(key);
                 if (existing != null) {
                     // Merge counts (keep first team's metadata)
@@ -54,8 +54,28 @@ public class SharedBackpack {
         if (stack.isEmpty()) return false;
         String teamId = TeamResolver.resolvePrimaryTeam(player);
         String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
-        String nbt = stack.hasTag() ? stack.getTag().toString() : null;
+        String nbt = stack.hasTag() ? stripMetadata(stack.getTag().toString()) : null;
         return SharedBackpackMod.database.addItem(teamId, itemId, stack.getCount(), nbt, player.getScoreboardName());
+    }
+
+    public static String stripMetadata(String nbtStr) {
+        if (nbtStr == null || nbtStr.isEmpty()) return null;
+        try {
+            CompoundTag tag = net.minecraft.nbt.TagParser.parseTag(nbtStr);
+            tag.remove("placedBy");
+            tag.remove("placedTime");
+            tag.remove("placedCount");
+            tag.remove("lastModifiedBy");
+            tag.remove("lastModifiedTime");
+            if (tag.contains("display")) {
+                CompoundTag display = tag.getCompound("display");
+                display.remove("Lore");
+                if (display.isEmpty()) tag.remove("display");
+            }
+            return tag.isEmpty() ? null : tag.toString();
+        } catch (Exception e) {
+            return nbtStr;
+        }
     }
 
     public static boolean removeItem(ServerPlayer player, String teamId, int slot, int count) {

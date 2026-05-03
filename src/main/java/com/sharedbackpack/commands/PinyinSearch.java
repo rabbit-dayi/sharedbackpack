@@ -23,32 +23,60 @@ public class PinyinSearch {
         if (query == null || query.isBlank()) return items;
 
         String q = query.toLowerCase().trim();
+        String[] words = q.split("\\s+");
 
         return items.stream()
-            .filter(item -> matches(item, q))
+            .filter(item -> matches(item, q, words))
             .collect(Collectors.toList());
     }
 
-    private static boolean matches(DatabaseManager.BackpackItem item, String query) {
-        // Match against item ID directly
+    private static boolean matches(DatabaseManager.BackpackItem item, String fullQuery, String[] words) {
+        for (String word : words) {
+            if (matchesWord(item, word)) return true;
+        }
+        return false;
+    }
+
+    private static boolean matchesWord(DatabaseManager.BackpackItem item, String query) {
+        // Namespace:search fuzzy match (e.g. forge:stone, minecraft:diamond)
+        if (query.contains(":")) {
+            String[] parts = query.split(":", 2);
+            String ns = parts[0].toLowerCase();
+            String term = parts[1].toLowerCase();
+            String itemNs = item.itemId.contains(":") ? item.itemId.split(":", 2)[0].toLowerCase() : "minecraft";
+            if (!itemNs.contains(ns)) return false;
+            if (term.isEmpty()) return true;
+            // Match term against path, name, pinyin
+            String path = item.itemId.contains(":") ? item.itemId.split(":", 2)[1].toLowerCase() : item.itemId.toLowerCase();
+            if (path.contains(term)) return true;
+            Item mcItem = BuiltInRegistries.ITEM.get(ResourceLocation.parse(item.itemId));
+            if (mcItem != null) {
+                String cnName = ChineseNames.get(mcItem.getDescriptionId());
+                if (cnName != null && PinyinUtil.matches(cnName, term)) return true;
+                String name = mcItem.getDescription().getString().toLowerCase();
+                if (name.contains(term)) return true;
+                if (PinyinUtil.matches(name, term)) return true;
+            }
+            return false;
+        }
+
+        // Plain term: match everywhere
         if (item.itemId.toLowerCase().contains(query)) return true;
 
-        // Match against item path part (after the colon)
         String path = item.itemId.contains(":") ? item.itemId.split(":", 2)[1] : item.itemId;
         if (path.toLowerCase().contains(query)) return true;
 
-        // Get display name
+        // Match against namespace (e.g. just "tfc" finds all TFC items)
+        String itemNs = item.itemId.contains(":") ? item.itemId.split(":", 2)[0].toLowerCase() : "minecraft";
+        if (itemNs.contains(query)) return true;
+
         Item mcItem = BuiltInRegistries.ITEM.get(ResourceLocation.parse(item.itemId));
         if (mcItem != null) {
-            String displayName = mcItem.getDescription().getString().toLowerCase();
-            // Direct name match
-            if (displayName.contains(query)) return true;
-            // Pinyin match
-            String pinyin = PinyinUtil.toPinyin(displayName);
-            if (pinyin.contains(query)) return true;
-            // Pinyin initials match
-            String initials = PinyinUtil.toPinyinInitials(displayName);
-            if (initials.contains(query)) return true;
+            String cnName = ChineseNames.get(mcItem.getDescriptionId());
+            if (cnName != null && PinyinUtil.matches(cnName, query)) return true;
+            String name = mcItem.getDescription().getString().toLowerCase();
+            if (name.contains(query)) return true;
+            if (PinyinUtil.matches(name, query)) return true;
         }
 
         return false;
@@ -68,15 +96,19 @@ public class PinyinSearch {
             if (id == null) continue;
 
             String itemId = id.toString().toLowerCase();
-            String displayName = item.getDescription().getString().toLowerCase();
+            String name = item.getDescription().getString().toLowerCase();
+            String cnName = ChineseNames.get(item.getDescriptionId());
 
-            boolean matched = itemId.contains(q)
-                || displayName.contains(q)
-                || PinyinUtil.toPinyin(displayName).contains(q)
-                || PinyinUtil.toPinyinInitials(displayName).contains(q);
+            boolean matched = itemId.contains(q) || name.contains(q)
+                || PinyinUtil.matches(name, q);
+
+            if (!matched && cnName != null) {
+                matched = cnName.toLowerCase().contains(q)
+                    || PinyinUtil.matches(cnName, q);
+            }
 
             if (matched) {
-                results.add(new ItemSearchResult(id.toString(), item.getDescription().getString()));
+                results.add(new ItemSearchResult(id.toString(), cnName != null ? cnName : name));
                 if (results.size() >= 20) break;
             }
         }
