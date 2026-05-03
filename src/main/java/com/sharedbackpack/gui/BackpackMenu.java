@@ -210,7 +210,7 @@ public class BackpackMenu extends AbstractContainerMenu {
 
     private void populateBoxMenu() {
         boxMenuMap.clear();
-        List<String> boxes = SharedBackpackMod.database.listBoxes(player.getStringUUID());
+        List<String> boxes = SharedBackpackMod.database.listBoxes(TeamResolver.resolvePrimaryTeam(player));
         int i = 0;
         for (String name : boxes) {
             if (i >= ITEMS_PER_PAGE - 1) break;
@@ -326,7 +326,7 @@ public class BackpackMenu extends AbstractContainerMenu {
                 if ("__new__".equals(name)) {
                     doCreateBox();
                 } else {
-                    String o = player.getStringUUID();
+                    String o = TeamResolver.resolvePrimaryTeam(player);
                     String n = name;
                     player.getServer().execute(() -> openForPlayer(player, searchFilter, 0, false, true, o + ":" + n));
                 }
@@ -407,7 +407,7 @@ public class BackpackMenu extends AbstractContainerMenu {
     }
 
     private void doCreateBox() {
-        String owner = player.getStringUUID();
+        String owner = TeamResolver.resolvePrimaryTeam(player);
         List<String> existing = SharedBackpackMod.database.listBoxes(owner);
         int n = existing.size() + 1;
         String name;
@@ -477,7 +477,7 @@ public class BackpackMenu extends AbstractContainerMenu {
     public static void openTeam(ServerPlayer player, String search) { openForPlayer(player, search, 0, false, false, null); }
     public static void openForPlayer(ServerPlayer player, String search) { openForPlayer(player, search, 0, false, false, null); }
     public static void openForPlayer(ServerPlayer player, String search, int page, boolean unload, boolean isBox, String boxOwner) {
-        String tid = isBox ? (boxOwner != null ? boxOwner : player.getStringUUID()) : TeamResolver.resolvePrimaryTeam(player);
+        String tid = isBox ? (boxOwner != null ? boxOwner : TeamResolver.resolvePrimaryTeam(player)) : TeamResolver.resolvePrimaryTeam(player);
         int mp = isBox ? SharedBackpackMod.database.getBoxMaxPages(tid, tid) : SharedBackpackMod.database.getMaxPages(tid);
         int cp = Math.max(0, Math.min(page, mp - 1));
         String displayName = tid;

@@ -191,7 +191,8 @@ public class CCCommand {
         if (!(src.getEntity() instanceof ServerPlayer player)) {
             src.sendFailure(Component.literal("此命令只能由玩家使用")); return 0;
         }
-        SharedBackpackMod.database.createBox(player.getStringUUID(), name);
+        String team = TeamResolver.resolvePrimaryTeam(player);
+        SharedBackpackMod.database.createBox(team, name);
         src.sendSuccess(() -> Component.literal("§a盒子 '" + name + "' 已创建"), false);
         return 1;
     }
@@ -200,7 +201,8 @@ public class CCCommand {
         if (!(src.getEntity() instanceof ServerPlayer player)) {
             src.sendFailure(Component.literal("此命令只能由玩家使用")); return 0;
         }
-        BackpackMenu.openForPlayer(player, "", 0, false, true, player.getStringUUID() + ":" + name);
+        String team = TeamResolver.resolvePrimaryTeam(player);
+        BackpackMenu.openForPlayer(player, "", 0, false, true, team + ":" + name);
         return 1;
     }
 
@@ -208,10 +210,11 @@ public class CCCommand {
         if (!(src.getEntity() instanceof ServerPlayer player)) {
             src.sendFailure(Component.literal("此命令只能由玩家使用")); return 0;
         }
-        List<String> boxes = SharedBackpackMod.database.listBoxes(player.getStringUUID());
-        if (boxes.isEmpty()) src.sendSuccess(() -> Component.literal("§7没有个人盒子"), false);
+        String team = TeamResolver.resolvePrimaryTeam(player);
+        List<String> boxes = SharedBackpackMod.database.listBoxes(team);
+        if (boxes.isEmpty()) src.sendSuccess(() -> Component.literal("§7队伍没有盒子"), false);
         else {
-            src.sendSuccess(() -> Component.literal("§6你的盒子:"), false);
+            src.sendSuccess(() -> Component.literal("§6盒子列表:"), false);
             for (String b : boxes) src.sendSuccess(() -> Component.literal(" §e- " + b), false);
         }
         return 1;
@@ -221,7 +224,8 @@ public class CCCommand {
         if (!(src.getEntity() instanceof ServerPlayer player)) {
             src.sendFailure(Component.literal("此命令只能由玩家使用")); return 0;
         }
-        SharedBackpackMod.database.deleteBox(player.getStringUUID(), name);
+        String team = TeamResolver.resolvePrimaryTeam(player);
+        SharedBackpackMod.database.deleteBox(team, name);
         src.sendSuccess(() -> Component.literal("§a盒子 '" + name + "' 已删除"), false);
         return 1;
     }
