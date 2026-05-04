@@ -46,6 +46,7 @@ public class BackpackMenu extends AbstractContainerMenu {
     private final long[] sortClicks = new long[3];
     private int sortClickIdx;
     private int page;
+    private int viewMaxPages = 1;
     private boolean loading;
     private final Map<Integer, Integer> slotMap = new HashMap<>();
     // slotTotalCount: gui slot index -> total stacked count (for stacked display)
@@ -190,7 +191,8 @@ public class BackpackMenu extends AbstractContainerMenu {
             int loaded = 0;
             if (!inMenu()) {
                 if (searchFilter != null && !searchFilter.isEmpty()) {
-                    // Search view: items are at positions 0..n-1 (mapped via slotMap)
+                    // Search view: all results on one page
+                    viewMaxPages = 1;
                     for (var item : items) {
                         int loc = item.slot;
                         if (loc >= 0 && loc < ITEMS_PER_PAGE) {
@@ -201,17 +203,20 @@ public class BackpackMenu extends AbstractContainerMenu {
                         }
                     }
                 } else if (modFilter != null) {
-                    // Mod-filter view: rebuild as compact list from index 0
+                    // Mod-filter view: paginated compact list
                     slotMap.clear(); slotTotalCount.clear();
+                    viewMaxPages = Math.max(1, (items.size() + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE);
+                    if (page >= viewMaxPages) page = viewMaxPages - 1;
                     // Group by key for stacked display
                     Map<String, Integer> totalByKey = new LinkedHashMap<>();
                     for (var item : items) {
                         String key = item.itemId + "\0" + (item.nbt != null ? item.nbt : "");
                         totalByKey.merge(key, item.count, Integer::sum);
                     }
+                    int start = page * ITEMS_PER_PAGE;
                     int loc = 0;
-                    for (var item : items) {
-                        if (loc >= ITEMS_PER_PAGE) break;
+                    for (int ii = start; ii < items.size() && loc < ITEMS_PER_PAGE; ii++) {
+                        var item = items.get(ii);
                         slotMap.put(loc, item.slot);
                         String key = item.itemId + "\0" + (item.nbt != null ? item.nbt : "");
                         int total = totalByKey.getOrDefault(key, item.count);
@@ -225,7 +230,8 @@ public class BackpackMenu extends AbstractContainerMenu {
                         loaded++; loc++;
                     }
                 } else {
-                    // Normal / mod-filter view: aggregate same items for stacked display
+                    // Normal view: aggregate same items for stacked display
+                    viewMaxPages = maxPages;
                     Map<String, Integer> totalByKey = new LinkedHashMap<>();
                     for (var item : items) {
                         int loc = item.slot - startSlot;
@@ -273,7 +279,7 @@ public class BackpackMenu extends AbstractContainerMenu {
             handler.setStackInSlot(PREV_SLOT, p);
         }
         ItemStack pi = new ItemStack(Items.PAPER);
-        pi.setHoverName(Component.literal("\u00a7e\u7b2c " + (page+1) + " / " + maxPages + " \u9875"));
+        pi.setHoverName(Component.literal("\u00a7e\u7b2c " + (page+1) + " / " + viewMaxPages + " \u9875"));
         handler.setStackInSlot(PAGE_SLOT, pi);
         ItemStack ci = new ItemStack(Items.BOOK);
         ci.setHoverName(Component.literal("\u00a7e\u7269\u54c1: " + dbTotal() + " \u4ef6"));
@@ -312,7 +318,7 @@ public class BackpackMenu extends AbstractContainerMenu {
         ItemStack ug = new ItemStack(Items.DIAMOND);
         ug.setHoverName(Component.literal("\u00a7b\u5347\u7ea7\u80cc\u5305 [+1\u9875] \u00a77\u9700\u8981 1 \u94bb\u77f3"));
         handler.setStackInSlot(UPGRADE_SLOT, ug);
-        if (page < maxPages - 1) {
+        if (page < viewMaxPages - 1) {
             ItemStack nx = new ItemStack(Items.ARROW);
             nx.setHoverName(Component.literal("\u00a76\u4e0b\u4e00\u9875 \u25b6"));
             handler.setStackInSlot(NEXT_SLOT, nx);
@@ -373,7 +379,7 @@ public class BackpackMenu extends AbstractContainerMenu {
             if (inMenu() && slotId == MOD_SLOT) { stashCarried(); currentMenu = null; refreshPage(); return; }
             if (!inMenu()) {
                 if (slotId == PREV_SLOT && page > 0) { navigateToPage(page-1); return; }
-                if (slotId == NEXT_SLOT && page < maxPages-1) { navigateToPage(page+1); return; }
+                if (slotId == NEXT_SLOT && page < viewMaxPages-1) { navigateToPage(page+1); return; }
                 if (slotId == UPGRADE_SLOT) { doUpgrade(); return; }
                 if (slotId == SORT_SLOT) { handleSort(button); return; }
                 if (slotId == MOD_SLOT) { toggleModMenu(); return; }
@@ -565,7 +571,7 @@ public class BackpackMenu extends AbstractContainerMenu {
         }
         public String onClick(int slotId, BackpackMenu m) {
             String ns = map.get(slotId); if (ns == null) return null;
-            m.modFilter = ns; m.currentMenu = null; m.refreshPage(); return "FILTER";
+            m.modFilter = ns; m.currentMenu = null; m.page = 0; m.refreshPage(); return "FILTER";
         }
     }
 
