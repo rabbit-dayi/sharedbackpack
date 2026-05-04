@@ -2,27 +2,44 @@ package com.sharedbackpack.gui;
 
 import com.sharedbackpack.commands.BindManager;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.Items;
+import net.minecraftforge.event.entity.player.AttackEntityEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 public class BackpackMenuHandler {
 
-    @SubscribeEvent
-    public static void onRightClickItem(PlayerInteractEvent.RightClickItem event) {
-        if (event.getEntity() instanceof ServerPlayer player
-            && BindManager.matches(player.getStringUUID(), event.getItemStack())) {
-            event.setCanceled(true);
-            player.getServer().execute(() -> BackpackMenu.openTeam(player, ""));
-        }
+    private boolean tryOpen(ServerPlayer player) {
+        if (!BindManager.matches(player.getStringUUID(), player.getMainHandItem())) return false;
+        player.getServer().execute(() -> BackpackMenu.openTeam(player, ""));
+        return true;
     }
 
     @SubscribeEvent
-    public static void onRightClickBlock(PlayerInteractEvent.RightClickBlock event) {
-        if (event.getEntity() instanceof ServerPlayer player
-            && BindManager.matches(player.getStringUUID(), event.getItemStack())) {
+    public void onRightClickItem(PlayerInteractEvent.RightClickItem event) {
+        if (event.getHand() != InteractionHand.MAIN_HAND) return;
+        if (event.getEntity() instanceof ServerPlayer player && tryOpen(player))
             event.setCanceled(true);
-            player.getServer().execute(() -> BackpackMenu.openTeam(player, ""));
-        }
+    }
+
+    @SubscribeEvent
+    public void onRightClickBlock(PlayerInteractEvent.RightClickBlock event) {
+        if (event.getHand() != InteractionHand.MAIN_HAND) return;
+        if (event.getEntity() instanceof ServerPlayer player && tryOpen(player))
+            event.setCanceled(true);
+    }
+
+    @SubscribeEvent
+    public void onLeftClickBlock(PlayerInteractEvent.LeftClickBlock event) {
+        if (event.getAction() != PlayerInteractEvent.LeftClickBlock.Action.START) return;
+        if (event.getEntity() instanceof ServerPlayer player && tryOpen(player))
+            event.setCanceled(true);
+    }
+
+    @SubscribeEvent
+    public void onAttackEntity(AttackEntityEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player && tryOpen(player))
+            event.setCanceled(true);
     }
 }
