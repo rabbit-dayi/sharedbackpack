@@ -4,6 +4,8 @@
 [![Java](https://img.shields.io/badge/Java-17%2B-blue)](https://www.oracle.com/java/)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
+![Screenshot](docs/screenshot.png)
+
 A server-only Minecraft Forge mod providing a team-shared backpack with SQLite storage, fuzzy Chinese pinyin search, and player-customizable boxes.
 
 服务端 only 的 Minecraft Forge 模组，提供基于 SQLite 的团队共享背包，支持模糊拼音搜索和玩家自定义盒子。
