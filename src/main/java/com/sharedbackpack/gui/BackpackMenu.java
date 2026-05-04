@@ -175,32 +175,25 @@ public class BackpackMenu extends AbstractContainerMenu {
             }
             if (searchFilter != null && !searchFilter.isEmpty()) {
                 items = PinyinSearch.search(items, searchFilter);
-                slotMap.clear(); slotTotalCount.clear();
-                List<DatabaseManager.BackpackItem> c = new ArrayList<>();
-                for (int i = 0; i < items.size(); i++) {
-                    var it = items.get(i);
-                    slotMap.put(i, it.slot);
-                    c.add(new DatabaseManager.BackpackItem(i, it.itemId, it.count, it.nbt,
-                        it.placedBy, it.placedTime, it.placedCount, it.lastModifiedBy, it.lastModifiedTime));
-                }
-                items = c;
-            } else {
-                slotMap.clear(); slotTotalCount.clear();
+                // slotMap built per-page in the rendering block below
             }
+            slotMap.clear(); slotTotalCount.clear();
 
             int loaded = 0;
             if (!inMenu()) {
                 if (searchFilter != null && !searchFilter.isEmpty()) {
-                    // Search view: all results on one page
-                    viewMaxPages = 1;
-                    for (var item : items) {
-                        int loc = item.slot;
-                        if (loc >= 0 && loc < ITEMS_PER_PAGE) {
-                            ItemStack st = SharedBackpack.toItemStack(item);
-                            setMeta(st, item);
-                            handler.setStackInSlot(loc, st);
-                            loaded++;
-                        }
+                    // Search view: paginated results
+                    viewMaxPages = Math.max(1, (items.size() + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE);
+                    if (page >= viewMaxPages) page = viewMaxPages - 1;
+                    int start = page * ITEMS_PER_PAGE;
+                    int loc = 0;
+                    for (int ii = start; ii < items.size() && loc < ITEMS_PER_PAGE; ii++) {
+                        var item = items.get(ii);
+                        slotMap.put(loc, item.slot);
+                        ItemStack st = SharedBackpack.toItemStack(item);
+                        setMeta(st, item);
+                        handler.setStackInSlot(loc, st);
+                        loaded++; loc++;
                     }
                 } else if (modFilter != null) {
                     // Mod-filter view: paginated compact list
