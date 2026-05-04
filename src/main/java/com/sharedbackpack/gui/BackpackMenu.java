@@ -106,7 +106,10 @@ public class BackpackMenu extends AbstractContainerMenu {
 
     private boolean isControlSlot(int s) { return !unloadMode && s >= ITEMS_PER_PAGE && s < GUI_SLOTS; }
     private boolean inMenu() { return currentMenu != null; }
-    private boolean isAltView() { return modFilter != null || searchFilter != null || inMenu(); }
+    // isMenuView: showing a selection menu (mod/box picker) - slots are UI buttons, no item interaction
+    private boolean isMenuView() { return currentMenu != null; }
+    // isAltView: items shown in non-positional order (search or mod-filter) - slotMap is active
+    private boolean isAltView() { return modFilter != null || (searchFilter != null && !searchFilter.isEmpty()) || inMenu(); }
     private int realDbSlot(int s) {
         Integer m = slotMap.get(s);
         return m != null ? m : page * ITEMS_PER_PAGE + s;
@@ -196,6 +199,30 @@ public class BackpackMenu extends AbstractContainerMenu {
                             handler.setStackInSlot(loc, st);
                             loaded++;
                         }
+                    }
+                } else if (modFilter != null) {
+                    // Mod-filter view: rebuild as compact list from index 0
+                    slotMap.clear(); slotTotalCount.clear();
+                    // Group by key for stacked display
+                    Map<String, Integer> totalByKey = new LinkedHashMap<>();
+                    for (var item : items) {
+                        String key = item.itemId + "\0" + (item.nbt != null ? item.nbt : "");
+                        totalByKey.merge(key, item.count, Integer::sum);
+                    }
+                    int loc = 0;
+                    for (var item : items) {
+                        if (loc >= ITEMS_PER_PAGE) break;
+                        slotMap.put(loc, item.slot);
+                        String key = item.itemId + "\0" + (item.nbt != null ? item.nbt : "");
+                        int total = totalByKey.getOrDefault(key, item.count);
+                        ItemStack st = SharedBackpack.toItemStack(item);
+                        setMeta(st, item);
+                        if (total > item.count) {
+                            slotTotalCount.put(loc, total);
+                            setStackedCountLore(st, total);
+                        }
+                        handler.setStackInSlot(loc, st);
+                        loaded++; loc++;
                     }
                 } else {
                     // Normal / mod-filter view: aggregate same items for stacked display
@@ -362,14 +389,8 @@ public class BackpackMenu extends AbstractContainerMenu {
         if (slotId >= 0 && slotId < max && clickType == ClickType.PICKUP) {
             Slot s = getSlot(slotId);
             ItemStack cur = getCarried();
-            // In alt view (search/filter), only allow taking items; block placing back
-            if (isAltView() && !inMenu()) {
-                if (s != null && s.hasItem() && s.mayPickup(clickPlayer) && cur.isEmpty()) {
-                    ItemStack ex = s.safeTake(1, 64, clickPlayer);
-                    if (!ex.isEmpty()) setCarried(ex);
-                }
-                return;
-            }
+            // In menu view (mod/box picker), item slots are UI - no interaction
+            if (isMenuView()) return;
             if (s != null && s.hasItem() && s.mayPickup(clickPlayer)) {
                 if (button == 0 && cur.isEmpty()) {
                     ItemStack ex = s.safeTake(1, 64, clickPlayer);
@@ -382,6 +403,16 @@ public class BackpackMenu extends AbstractContainerMenu {
                     if (!ex.isEmpty()) setCarried(ex);
                     return;
                 }
+            }
+            // Placing carried item: in alt view (search/mod-filter), use dbAdd instead of slot-based set
+            if (!cur.isEmpty() && isAltView()) {
+                String iid = BuiltInRegistries.ITEM.getKey(cur.getItem()).toString();
+                String nbt = nbtForStorage(cur);
+                if (dbAdd(iid, cur.getCount(), nbt, player.getScoreboardName())) {
+                    setCarried(ItemStack.EMPTY);
+                    refreshPage();
+                }
+                return;
             }
         }
         super.clicked(slotId, button, clickType, clickPlayer);
@@ -446,30 +477,45 @@ public class BackpackMenu extends AbstractContainerMenu {
         if (inMenu() && isControlSlot(index)) return ItemStack.EMPTY;
 
         ItemStack src = s.getItem().copy();
+        ItemStack orig = src.copy();
 
-        if (index < (unloadMode?GUI_SLOTS_UNLOAD:GUI_SLOTS)) {
+        if (index < (unloadMode ? GUI_SLOTS_UNLOAD : GUI_SLOTS)) {
             // Shift-click from backpack -> player inventory
-            stripDisplay(src);
-            if (!moveItemStackTo(src, invStart(), invEnd(), true)) return ItemStack.EMPTY;
+            ItemStack toMove = src.copy();
+            stripDisplay(toMove);
+            if (!moveItemStackTo(toMove, invStart(), invEnd(), true)) return ItemStack.EMPTY;
+            // How many were moved?
+            int moved = src.getCount() - toMove.getCount();
+            if (moved <= 0) return ItemStack.EMPTY;
+            // Remove from DB
+            int dbSlot = realDbSlot(index);
+            dbRemove(dbSlot, moved);
+            // Update handler
+            if (moved >= src.getCount()) {
+                handler.setStackInSlot(index, ItemStack.EMPTY);
+            } else {
+                ItemStack rem = src.copy(); rem.setCount(src.getCount() - moved);
+                handler.setStackInSlot(index, rem);
+            }
         } else {
-            // Shift-click from player inventory -> backpack
-            if (isAltView()) return ItemStack.EMPTY;
+            // Shift-click from player inventory -> backpack (works in all views)
             String iid = BuiltInRegistries.ITEM.getKey(src.getItem()).toString();
             String nbt = nbtForStorage(src);
             boolean added = dbAdd(iid, src.getCount(), nbt, player.getScoreboardName());
             if (!added) return ItemStack.EMPTY;
-            src.setCount(0);
+            s.set(ItemStack.EMPTY);
             refreshPage();
+            return orig;
         }
-        // BpSlot.set() handles DB writes; vanilla Slot.set() only calls setChanged()
-        // and does NOT modify the container - use setByPlayer for inventory slots instead.
-        boolean isBpSlot = index < (unloadMode ? GUI_SLOTS_UNLOAD : GUI_SLOTS);
-        if (src.isEmpty()) {
-            if (isBpSlot) s.set(ItemStack.EMPTY); else s.setByPlayer(ItemStack.EMPTY);
+        // Sync source slot for backpack->inventory direction
+        if (handler.getStackInSlot(index).isEmpty()) {
+            s.set(ItemStack.EMPTY);
         } else {
-            if (isBpSlot) s.set(src); else s.setByPlayer(src);
+            // force client sync
+            broadcastChanges();
         }
-        return ItemStack.EMPTY;
+        refreshPage();
+        return orig;
     }
 
     @Override public boolean stillValid(Player p) { return true; }
@@ -557,7 +603,7 @@ public class BackpackMenu extends AbstractContainerMenu {
         final int ls;
         BpSlot(int ls, int x, int y) { super(new BpContainer(ls), 0, x, y); this.ls = ls; }
         public boolean mayPickup(Player p) { return !isControlSlot(ls); }
-        public boolean mayPlace(ItemStack s) { return !isControlSlot(ls) && !isAltView(); }
+        public boolean mayPlace(ItemStack s) { return !isControlSlot(ls) && !isMenuView(); }
         public void onTake(Player t, ItemStack s) {
             if (!isControlSlot(ls)) { stripDisplay(s); s.resetHoverName(); dbRemove(realDbSlot(ls), s.getCount()); }
         }
