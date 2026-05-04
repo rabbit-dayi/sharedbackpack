@@ -445,7 +445,7 @@ public class BackpackMenu extends AbstractContainerMenu {
         if (!unloadMode && !inMenu() && isControlSlot(index)) return ItemStack.EMPTY;
         if (inMenu() && isControlSlot(index)) return ItemStack.EMPTY;
 
-        ItemStack src = s.getItem().copy(), orig = src.copy();
+        ItemStack src = s.getItem().copy();
 
         if (index < (unloadMode?GUI_SLOTS_UNLOAD:GUI_SLOTS)) {
             // Shift-click from backpack -> player inventory
@@ -454,16 +454,22 @@ public class BackpackMenu extends AbstractContainerMenu {
         } else {
             // Shift-click from player inventory -> backpack
             if (isAltView()) return ItemStack.EMPTY;
-            // Use dbAdd to add item to backpack (handles stacking and slot allocation)
             String iid = BuiltInRegistries.ITEM.getKey(src.getItem()).toString();
             String nbt = nbtForStorage(src);
             boolean added = dbAdd(iid, src.getCount(), nbt, player.getScoreboardName());
             if (!added) return ItemStack.EMPTY;
-            src.setCount(0); // consume all
+            src.setCount(0);
             refreshPage();
         }
-        if (src.isEmpty()) s.set(ItemStack.EMPTY); else s.set(src);
-        return orig;
+        // BpSlot.set() handles DB writes; vanilla Slot.set() only calls setChanged()
+        // and does NOT modify the container - use setByPlayer for inventory slots instead.
+        boolean isBpSlot = index < (unloadMode ? GUI_SLOTS_UNLOAD : GUI_SLOTS);
+        if (src.isEmpty()) {
+            if (isBpSlot) s.set(ItemStack.EMPTY); else s.setByPlayer(ItemStack.EMPTY);
+        } else {
+            if (isBpSlot) s.set(src); else s.setByPlayer(src);
+        }
+        return ItemStack.EMPTY;
     }
 
     @Override public boolean stillValid(Player p) { return true; }

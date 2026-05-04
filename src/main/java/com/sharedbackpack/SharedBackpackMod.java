@@ -3,6 +3,7 @@ package com.sharedbackpack;
 import com.sharedbackpack.commands.CCommand;
 import com.sharedbackpack.commands.CCCommand;
 import com.sharedbackpack.commands.ChineseNames;
+import com.sharedbackpack.commands.DebugCommand;
 import com.sharedbackpack.database.DatabaseManager;
 import com.sharedbackpack.gui.BackpackMenu;
 import net.minecraftforge.common.MinecraftForge;
@@ -50,5 +51,6 @@ public class SharedBackpackMod {
     public void onRegisterCommands(RegisterCommandsEvent event) {
         CCommand.register(event.getDispatcher());
         CCCommand.register(event.getDispatcher());
+        DebugCommand.register(event.getDispatcher());
     }
 }
