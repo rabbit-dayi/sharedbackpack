@@ -1,9 +1,0 @@
-{
-  "itemGroup.sharedbackpack": "共享背包",
-  "gui.sharedbackpack.title": "共享背包",
-  "gui.sharedbackpack.search": "搜索",
-  "gui.sharedbackpack.page": "第 %d/%d 页",
-  "gui.sharedbackpack.upgrade": "升级（1个钻石）",
-  "gui.sharedbackpack.info": "放入: %s | 数量: %d",
-  "command.sharedbackpack.help": "共享背包帮助"
-}

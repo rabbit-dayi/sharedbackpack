@@ -1,9 +1,0 @@
-{
-  "itemGroup.sharedbackpack": "Shared Backpack",
-  "gui.sharedbackpack.title": "Shared Backpack",
-  "gui.sharedbackpack.search": "Search",
-  "gui.sharedbackpack.page": "Page %d/%d",
-  "gui.sharedbackpack.upgrade": "Upgrade (1 Diamond)",
-  "gui.sharedbackpack.info": "Placed: %s | Count: %d",
-  "command.sharedbackpack.help": "Shared Backpack Help"
-}

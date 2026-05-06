@@ -3,8 +3,14 @@ build/
 *.class
 *.jar
 *.log
+*.zip
 !gradle/wrapper/gradle-wrapper.jar
 .idea/
 *.iml
 out/
 run/
+net/
+*.png
+!docs/screenshot.png
+local/
+tmp/
