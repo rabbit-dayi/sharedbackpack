@@ -2,6 +2,7 @@ package com.sharedbackpack;
 
 import com.sharedbackpack.commands.CCommand;
 import com.sharedbackpack.commands.CCCommand;
+import com.sharedbackpack.commands.BindManager;
 import com.sharedbackpack.commands.ChineseNames;
 import com.sharedbackpack.commands.DebugCommand;
 import com.sharedbackpack.database.DatabaseManager;
@@ -32,6 +33,7 @@ public class SharedBackpackMod {
     public void onServerStarting(ServerStartingEvent event) {
         database = new DatabaseManager(event.getServer());
         database.init();
+        BindManager.loadAll();
         ChineseNames.load(event.getServer());
         if (database.isReady()) {
             LOGGER.info("Shared Backpack database initialized successfully");

@@ -134,6 +134,15 @@ public class DatabaseManager {
                 )
             """);
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_box_owner ON player_box_items(owner_uuid, box_name)");
+
+            // Player binds (persistent across restarts)
+            stmt.execute("""
+                CREATE TABLE IF NOT EXISTS player_binds (
+                    player_uuid TEXT PRIMARY KEY,
+                    item_id TEXT NOT NULL,
+                    box_target TEXT
+                )
+            """);
         }
     }
 
@@ -799,6 +808,36 @@ public class DatabaseManager {
         } catch (SQLException e) {
             SharedBackpackMod.LOGGER.error("Failed to close database", e);
         }
+    }
+
+    // ========== Player Bind Persistence ==========
+
+    public synchronized void saveBind(String uuid, String itemId, String boxTarget) {
+        if (!isReady()) return;
+        try (PreparedStatement ps = connection.prepareStatement(
+                "INSERT INTO player_binds(player_uuid, item_id, box_target) VALUES(?,?,?) ON CONFLICT(player_uuid) DO UPDATE SET item_id=excluded.item_id, box_target=excluded.box_target")) {
+            ps.setString(1, uuid); ps.setString(2, itemId); ps.setString(3, boxTarget); ps.executeUpdate();
+        } catch (SQLException e) { SharedBackpackMod.LOGGER.error("Failed saveBind", e); }
+    }
+
+    public synchronized void deleteBind(String uuid) {
+        if (!isReady()) return;
+        try (PreparedStatement ps = connection.prepareStatement("DELETE FROM player_binds WHERE player_uuid=?")) {
+            ps.setString(1, uuid); ps.executeUpdate();
+        } catch (SQLException e) { SharedBackpackMod.LOGGER.error("Failed deleteBind", e); }
+    }
+
+    public static class BindEntry { public final String itemId; public final String boxTarget;
+        BindEntry(String i, String b) { itemId=i; boxTarget=b; } }
+
+    public synchronized Map<String, BindEntry> loadAllBinds() {
+        Map<String, BindEntry> map = new HashMap<>();
+        if (!isReady()) return map;
+        try (Statement st = connection.createStatement();
+             ResultSet rs = st.executeQuery("SELECT player_uuid, item_id, box_target FROM player_binds")) {
+            while (rs.next()) map.put(rs.getString("player_uuid"), new BindEntry(rs.getString("item_id"), rs.getString("box_target")));
+        } catch (SQLException e) { SharedBackpackMod.LOGGER.error("Failed loadAllBinds", e); }
+        return map;
     }
 
     private int findEmptySlot(String teamId, int maxSlots) throws SQLException {
