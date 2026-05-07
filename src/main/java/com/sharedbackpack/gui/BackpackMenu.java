@@ -34,6 +34,8 @@ public class BackpackMenu extends AbstractContainerMenu {
     private static final int INV_START_NORMAL=GUI_SLOTS, INV_END_NORMAL=GUI_SLOTS+36;
     private static final int INV_START_UNLOAD=GUI_SLOTS_UNLOAD, INV_END_UNLOAD=GUI_SLOTS_UNLOAD+36;
 
+    private static final Map<String, Integer> PLAYER_SORT_PREF = new HashMap<>();
+
     private final ItemStackHandler handler;
     private final String teamId;
     private final ServerPlayer player;
@@ -61,6 +63,7 @@ public class BackpackMenu extends AbstractContainerMenu {
         this.searchFilter = searchFilter; this.unloadMode = unloadMode;
         this.isBox = isBox; this.boxOwner = boxOwner;
         this.handler = new ItemStackHandler(unloadMode ? GUI_SLOTS_UNLOAD : GUI_SLOTS);
+        this.displaySort = PLAYER_SORT_PREF.getOrDefault(player.getStringUUID(), 0);
 
         int total = unloadMode ? GUI_SLOTS_UNLOAD : GUI_SLOTS;
         for (int i = 0; i < total; i++) addSlot(new BpSlot(i, 8 + (i%9)*18, 18 + (i/9)*18));
@@ -347,7 +350,7 @@ public class BackpackMenu extends AbstractContainerMenu {
 
     private void refreshPage() { loadPage(); broadcastChanges(); }
     private void navigateToPage(int np) { stashCarried(); page = np; refreshPage(); }
-    private void cycleSortMode() { displaySort = (displaySort + 1) % 5; page = 0; refreshPage(); }
+    private void cycleSortMode() { displaySort = (displaySort + 1) % 5; PLAYER_SORT_PREF.put(player.getStringUUID(), displaySort); page = 0; refreshPage(); }
 
     private void stashCarried() {
         ItemStack c = getCarried(); if (c.isEmpty()) return;
@@ -585,7 +588,7 @@ public class BackpackMenu extends AbstractContainerMenu {
         }
         public String onClick(int slotId, BackpackMenu m) {
             String ns = map.get(slotId); if (ns == null) return null;
-            m.modFilter = ns; m.currentMenu = null; m.page = 0; m.displaySort = 0; m.refreshPage(); return "FILTER";
+            m.modFilter = ns; m.currentMenu = null; m.page = 0; m.refreshPage(); return "FILTER";
         }
     }
 
