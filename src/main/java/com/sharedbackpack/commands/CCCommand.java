@@ -74,9 +74,15 @@ public class CCCommand {
                         .executes(ctx -> deleteBox(ctx.getSource(), StringArgumentType.getString(ctx, "name")))))
                 .then(Commands.literal("upgrade")
                     .then(Commands.argument("name", StringArgumentType.string())
-                        .executes(ctx -> upgradeBox(ctx.getSource(), StringArgumentType.getString(ctx, "name"))))))
+                        .executes(ctx -> upgradeBox(ctx.getSource(), StringArgumentType.getString(ctx, "name")))))
+                // Quick open: /cc box <name> directly
+                .then(Commands.argument("quickname", StringArgumentType.string())
+                    .executes(ctx -> openBox(ctx.getSource(), StringArgumentType.getString(ctx, "quickname")))))
             .then(Commands.literal("bind")
-                .executes(ctx -> bindItem(ctx.getSource())))
+                .executes(ctx -> bindItem(ctx.getSource()))
+                .then(Commands.literal("box")
+                    .then(Commands.argument("name", StringArgumentType.string())
+                        .executes(ctx -> bindToBox(ctx.getSource(), StringArgumentType.getString(ctx, "name"))))))
             .then(Commands.literal("unbind")
                 .executes(ctx -> unbindItem(ctx.getSource())))
         );
@@ -253,6 +259,19 @@ public class CCCommand {
         }
         BindManager.bind(player.getStringUUID(), stack);
         src.sendSuccess(() -> Component.literal("§a已绑定 " + stack.getHoverName().getString() + " 为背包钥匙"), false);
+        return 1;
+    }
+
+    private static int bindToBox(CommandSourceStack src, String boxName) {
+        if (!(src.getEntity() instanceof ServerPlayer player)) {
+            src.sendFailure(Component.literal("此命令只能由玩家使用")); return 0;
+        }
+        var stack = player.getMainHandItem();
+        if (stack.isEmpty()) {
+            src.sendFailure(Component.literal("请手持一个物品")); return 0;
+        }
+        BindManager.bindToBox(player.getStringUUID(), stack, boxName);
+        src.sendSuccess(() -> Component.literal("§a已绑定 " + stack.getHoverName().getString() + " → 快速打开盒子: " + boxName), false);
         return 1;
     }
 

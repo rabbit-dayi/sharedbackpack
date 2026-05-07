@@ -18,6 +18,7 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraftforge.items.ItemStackHandler;
@@ -47,6 +48,7 @@ public class BackpackMenu extends AbstractContainerMenu {
     private int sortClickIdx;
     private int page;
     private int viewMaxPages = 1;
+    private int displaySort = 0; // 0=default 1=count_desc 2=count_asc 3=time_desc 4=time_asc
     private boolean loading;
     private final Map<Integer, Integer> slotMap = new HashMap<>();
     // slotTotalCount: gui slot index -> total stacked count (for stacked display)
@@ -109,8 +111,8 @@ public class BackpackMenu extends AbstractContainerMenu {
     private boolean inMenu() { return currentMenu != null; }
     // isMenuView: showing a selection menu (mod/box picker) - slots are UI buttons, no item interaction
     private boolean isMenuView() { return currentMenu != null; }
-    // isAltView: items shown in non-positional order (search or mod-filter) - slotMap is active
-    private boolean isAltView() { return modFilter != null || (searchFilter != null && !searchFilter.isEmpty()) || inMenu(); }
+    // isAltView: items shown in non-positional order (search/mod-filter/sort) - slotMap is active
+    private boolean isAltView() { return modFilter != null || (searchFilter != null && !searchFilter.isEmpty()) || displaySort != 0 || inMenu(); }
     private int realDbSlot(int s) {
         Integer m = slotMap.get(s);
         return m != null ? m : page * ITEMS_PER_PAGE + s;
@@ -152,8 +154,28 @@ public class BackpackMenu extends AbstractContainerMenu {
             if (t.length() >= 16) t = t.substring(11, 16);
             meta += " " + t;
         }
-        meta += " x" + item.placedCount + "]";
+        if (item.placedCount > 0 && item.placedCount <= 999_999_999) meta += " x" + item.placedCount;
+        meta += "]";
         stack.setHoverName(name.copy().append(Component.literal(" \u00a77" + meta)));
+    }
+
+    private List<DatabaseManager.BackpackItem> applySortOrder(List<DatabaseManager.BackpackItem> items) {
+        List<DatabaseManager.BackpackItem> sorted = new ArrayList<>(items);
+        switch (displaySort) {
+            case 1 -> sorted.sort((a, b) -> Integer.compare(b.count, a.count));
+            case 2 -> sorted.sort(Comparator.comparingInt(it -> it.count));
+            case 3 -> sorted.sort((a, b) -> {
+                String ta = a.lastModifiedTime != null ? a.lastModifiedTime : (a.placedTime != null ? a.placedTime : "");
+                String tb = b.lastModifiedTime != null ? b.lastModifiedTime : (b.placedTime != null ? b.placedTime : "");
+                return tb.compareTo(ta);
+            });
+            case 4 -> sorted.sort((a, b) -> {
+                String ta = a.lastModifiedTime != null ? a.lastModifiedTime : (a.placedTime != null ? a.placedTime : "");
+                String tb = b.lastModifiedTime != null ? b.lastModifiedTime : (b.placedTime != null ? b.placedTime : "");
+                return ta.compareTo(tb);
+            });
+        }
+        return sorted;
     }
 
     // ===== Page loading =====
@@ -175,32 +197,21 @@ public class BackpackMenu extends AbstractContainerMenu {
             }
             if (searchFilter != null && !searchFilter.isEmpty()) {
                 items = PinyinSearch.search(items, searchFilter);
-                // slotMap built per-page in the rendering block below
+            }
+            if (displaySort != 0) {
+                items = applySortOrder(items);
             }
             slotMap.clear(); slotTotalCount.clear();
 
+            // compactView: items rendered as a compact paginated list using slotMap
+            boolean compactView = (searchFilter != null && !searchFilter.isEmpty()) || modFilter != null || displaySort != 0;
+
             int loaded = 0;
             if (!inMenu()) {
-                if (searchFilter != null && !searchFilter.isEmpty()) {
-                    // Search view: paginated results
+                if (compactView) {
+                    // Compact view: search / mod-filter / sort — build slotMap from filtered+sorted list
                     viewMaxPages = Math.max(1, (items.size() + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE);
                     if (page >= viewMaxPages) page = viewMaxPages - 1;
-                    int start = page * ITEMS_PER_PAGE;
-                    int loc = 0;
-                    for (int ii = start; ii < items.size() && loc < ITEMS_PER_PAGE; ii++) {
-                        var item = items.get(ii);
-                        slotMap.put(loc, item.slot);
-                        ItemStack st = SharedBackpack.toItemStack(item);
-                        setMeta(st, item);
-                        handler.setStackInSlot(loc, st);
-                        loaded++; loc++;
-                    }
-                } else if (modFilter != null) {
-                    // Mod-filter view: paginated compact list
-                    slotMap.clear(); slotTotalCount.clear();
-                    viewMaxPages = Math.max(1, (items.size() + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE);
-                    if (page >= viewMaxPages) page = viewMaxPages - 1;
-                    // Group by key for stacked display
                     Map<String, Integer> totalByKey = new LinkedHashMap<>();
                     for (var item : items) {
                         String key = item.itemId + "\0" + (item.nbt != null ? item.nbt : "");
@@ -223,7 +234,7 @@ public class BackpackMenu extends AbstractContainerMenu {
                         loaded++; loc++;
                     }
                 } else {
-                    // Normal view: aggregate same items for stacked display
+                    // Normal view: positional rendering by DB slot
                     viewMaxPages = maxPages;
                     Map<String, Integer> totalByKey = new LinkedHashMap<>();
                     for (var item : items) {
@@ -300,9 +311,17 @@ public class BackpackMenu extends AbstractContainerMenu {
             handler.setStackInSlot(MOD_SLOT, am);
         }
 
+        // SEARCH_SLOT: sort-order toggle (shows search info too if active)
+        String[] sortLabels = {"\u00a77\u9ed8\u8ba4\u987a\u5e8f", "\u00a7a\u6570\u91cf\u2193(\u591a\u2192\u5c11)", "\u00a7b\u6570\u91cf\u2191(\u5c11\u2192\u591a)", "\u00a7e\u6700\u65b0\u653e\u5165\u2193", "\u00a76\u6700\u65e9\u653e\u5165\u2191"};
+        Item[] sortIcons = {Items.COMPARATOR, Items.GOLD_INGOT, Items.IRON_INGOT, Items.CLOCK, Items.FEATHER};
         if (searchFilter != null && !searchFilter.isEmpty()) {
             ItemStack si = new ItemStack(Items.COMPASS);
-            si.setHoverName(Component.literal("\u00a7d\u641c\u7d22: " + searchFilter));
+            String suf = displaySort != 0 ? " \u00a77[" + sortLabels[displaySort] + "\u00a77]" : "";
+            si.setHoverName(Component.literal("\u00a7d\u641c\u7d22: " + searchFilter + suf + " \u00a78(\u70b9\u51fb\u5207\u6362\u6392\u5e8f)"));
+            handler.setStackInSlot(SEARCH_SLOT, si);
+        } else {
+            ItemStack si = new ItemStack(sortIcons[displaySort]);
+            si.setHoverName(Component.literal(sortLabels[displaySort] + " \u00a77(\u70b9\u51fb\u5207\u6362)"));
             handler.setStackInSlot(SEARCH_SLOT, si);
         }
         ItemStack sb = new ItemStack(Items.HOPPER);
@@ -328,6 +347,7 @@ public class BackpackMenu extends AbstractContainerMenu {
 
     private void refreshPage() { loadPage(); broadcastChanges(); }
     private void navigateToPage(int np) { stashCarried(); page = np; refreshPage(); }
+    private void cycleSortMode() { displaySort = (displaySort + 1) % 5; page = 0; refreshPage(); }
 
     private void stashCarried() {
         ItemStack c = getCarried(); if (c.isEmpty()) return;
@@ -373,6 +393,7 @@ public class BackpackMenu extends AbstractContainerMenu {
             if (!inMenu()) {
                 if (slotId == PREV_SLOT && page > 0) { navigateToPage(page-1); return; }
                 if (slotId == NEXT_SLOT && page < viewMaxPages-1) { navigateToPage(page+1); return; }
+                if (slotId == SEARCH_SLOT) { cycleSortMode(); return; }
                 if (slotId == UPGRADE_SLOT) { doUpgrade(); return; }
                 if (slotId == SORT_SLOT) { handleSort(button); return; }
                 if (slotId == MOD_SLOT) { toggleModMenu(); return; }
@@ -564,7 +585,7 @@ public class BackpackMenu extends AbstractContainerMenu {
         }
         public String onClick(int slotId, BackpackMenu m) {
             String ns = map.get(slotId); if (ns == null) return null;
-            m.modFilter = ns; m.currentMenu = null; m.page = 0; m.refreshPage(); return "FILTER";
+            m.modFilter = ns; m.currentMenu = null; m.page = 0; m.displaySort = 0; m.refreshPage(); return "FILTER";
         }
     }
 

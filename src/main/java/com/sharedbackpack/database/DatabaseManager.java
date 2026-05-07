@@ -198,7 +198,7 @@ public class DatabaseManager {
                     int existing = rs.getInt("count");
                     if (existing < 64) {
                         int canAdd = Math.min(count, 64 - existing);
-                        int newPlacedCount = rs.getInt("placed_count") + canAdd;
+                        int newPlacedCount = (int) Math.min((long)rs.getInt("placed_count") + canAdd, 999_999_999L);
                         String updSql = "UPDATE backpack_items SET count = count + ?, placed_count = ?, last_modified_by = ?, last_modified_time = ? WHERE team_id = ? AND slot = ?";
                         try (PreparedStatement upd = connection.prepareStatement(updSql)) {
                             upd.setInt(1, canAdd);
@@ -399,7 +399,7 @@ public class DatabaseManager {
                     groups.put(key, new BackpackItem(
                         0, item.itemId, existing.count + item.count, item.nbt,
                         existing.placedBy, existing.placedTime,
-                        existing.placedCount + item.placedCount,
+                        (int) Math.min((long)existing.placedCount + item.placedCount, 999_999_999L),
                         item.lastModifiedBy, item.lastModifiedTime));
                 } else {
                     groups.put(key, new BackpackItem(
@@ -475,7 +475,7 @@ public class DatabaseManager {
                 BackpackItem ex = groups.get(key);
                 if (ex != null) {
                     groups.put(key, new BackpackItem(0, it.itemId, ex.count + it.count, it.nbt,
-                        ex.placedBy, ex.placedTime, ex.placedCount + it.placedCount,
+                        ex.placedBy, ex.placedTime, (int) Math.min((long)ex.placedCount + it.placedCount, 999_999_999L),
                         it.lastModifiedBy, it.lastModifiedTime));
                 } else groups.put(key, it);
             }
@@ -703,7 +703,7 @@ public class DatabaseManager {
                 BackpackItem ex = groups.get(key);
                 if (ex != null) {
                     groups.put(key, new BackpackItem(0, item.itemId, ex.count + item.count, item.nbt,
-                        ex.placedBy, ex.placedTime, ex.placedCount + item.placedCount,
+                        ex.placedBy, ex.placedTime, (int) Math.min((long)ex.placedCount + item.placedCount, 999_999_999L),
                         item.lastModifiedBy, item.lastModifiedTime));
                 } else groups.put(key, item);
             }
@@ -757,7 +757,7 @@ public class DatabaseManager {
                 String key = it.itemId + "\0" + (it.nbt != null ? it.nbt : "");
                 BackpackItem ex = groups.get(key);
                 if (ex != null) groups.put(key, new BackpackItem(0, it.itemId, ex.count + it.count, it.nbt,
-                    ex.placedBy, ex.placedTime, ex.placedCount + it.placedCount,
+                    ex.placedBy, ex.placedTime, (int) Math.min((long)ex.placedCount + it.placedCount, 999_999_999L),
                     it.lastModifiedBy, it.lastModifiedTime));
                 else groups.put(key, it);
             }

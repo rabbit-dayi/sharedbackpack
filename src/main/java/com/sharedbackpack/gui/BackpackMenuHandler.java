@@ -1,6 +1,7 @@
 package com.sharedbackpack.gui;
 
 import com.sharedbackpack.commands.BindManager;
+import com.sharedbackpack.backpack.TeamResolver;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.Items;
@@ -12,7 +13,14 @@ public class BackpackMenuHandler {
 
     private boolean tryOpen(ServerPlayer player) {
         if (!BindManager.matches(player.getStringUUID(), player.getMainHandItem())) return false;
-        player.getServer().execute(() -> BackpackMenu.openTeam(player, ""));
+        String boxTarget = BindManager.getBoxTarget(player.getStringUUID());
+        if (boxTarget != null) {
+            String team = TeamResolver.resolvePrimaryTeam(player);
+            String boxOwner = team + ":" + boxTarget;
+            player.getServer().execute(() -> BackpackMenu.openForPlayer(player, "", 0, false, true, boxOwner));
+        } else {
+            player.getServer().execute(() -> BackpackMenu.openTeam(player, ""));
+        }
         return true;
     }
 
