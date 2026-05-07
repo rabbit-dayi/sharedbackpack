@@ -3,7 +3,7 @@
 # Usage: ./deploy.sh
 
 SERVER_DIR="/opt/dayi/plant_bird/tffh1.2.2server_fix"
-MOD_JAR="/opt/dayi/plant_bird/cc_mod/build/libs/sharedbackpack-1.5.5.jar"
+MOD_JAR="/opt/dayi/plant_bird/cc_mod/build/libs/sharedbackpack-1.5.6.jar"
 MODS_DIR="$SERVER_DIR/mods"
 
 echo "Deploying Shared Backpack mod to tffh1server..."

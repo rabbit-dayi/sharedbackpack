@@ -5,7 +5,6 @@ import com.sharedbackpack.backpack.SharedBackpack;
 import com.sharedbackpack.backpack.TeamResolver;
 import com.sharedbackpack.commands.PinyinSearch;
 import com.sharedbackpack.database.DatabaseManager;
-import net.minecraft.ChatFormatting;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
@@ -147,19 +146,32 @@ public class BackpackMenu extends AbstractContainerMenu {
 
     static void setMeta(ItemStack stack, DatabaseManager.BackpackItem item) {
         if (item.placedBy == null) return;
-        Component name = stack.getHoverName();
-        String ns = name.getString();
-        int bi = ns.lastIndexOf(" \u00a77[");
-        if (bi > 0) name = Component.literal(ns.substring(0, bi));
-        String meta = ChatFormatting.GRAY + "[" + item.placedBy;
-        if (item.placedTime != null) {
-            String t = item.placedTime;
-            if (t.length() >= 16) t = t.substring(11, 16);
-            meta += " " + t;
+        CompoundTag tag = stack.getOrCreateTag();
+        CompoundTag display = tag.contains("display") ? tag.getCompound("display") : new CompoundTag();
+        net.minecraft.nbt.ListTag lore = new net.minecraft.nbt.ListTag();
+        lore.add(loreLine("\u00a78\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"));
+        lore.add(loreLine("\u00a77\u653e\u5165: \u00a7e" + item.placedBy
+                + (item.placedTime != null ? "  \u00a78" + fmtTime(item.placedTime) : "")));
+        if (item.placedCount > 0 && item.placedCount < 100_000) {
+            lore.add(loreLine("\u00a77\u7d2f\u8ba1\u653e\u5165: \u00a7a" + item.placedCount + " \u6b21"));
         }
-        if (item.placedCount > 0 && item.placedCount <= 999_999_999) meta += " x" + item.placedCount;
-        meta += "]";
-        stack.setHoverName(name.copy().append(Component.literal(" \u00a77" + meta)));
+        if (item.lastModifiedBy != null && !item.lastModifiedBy.equals(item.placedBy)) {
+            lore.add(loreLine("\u00a77\u6700\u540e\u64cd\u4f5c: \u00a7b" + item.lastModifiedBy
+                    + (item.lastModifiedTime != null ? "  \u00a78" + fmtTime(item.lastModifiedTime) : "")));
+        }
+        display.put("Lore", lore);
+        tag.put("display", display);
+    }
+
+    private static String fmtTime(String t) {
+        if (t == null) return "";
+        if (t.length() >= 16) return t.substring(5, 16); // "MM-dd HH:mm"
+        return t;
+    }
+
+    private static net.minecraft.nbt.StringTag loreLine(String text) {
+        String esc = text.replace("\\", "\\\\").replace("\"", "\\\"");
+        return net.minecraft.nbt.StringTag.valueOf("{\"text\":\"" + esc + "\",\"italic\":false}");
     }
 
     private List<DatabaseManager.BackpackItem> applySortOrder(List<DatabaseManager.BackpackItem> items) {
@@ -273,9 +285,11 @@ public class BackpackMenu extends AbstractContainerMenu {
     static void setStackedCountLore(ItemStack stack, int total) {
         CompoundTag tag = stack.getOrCreateTag();
         CompoundTag display = tag.contains("display") ? tag.getCompound("display") : new CompoundTag();
+        // Prepend stacked count, keep existing lore (meta info) below
+        net.minecraft.nbt.ListTag existing = display.contains("Lore") ? display.getList("Lore", 8) : new net.minecraft.nbt.ListTag();
         net.minecraft.nbt.ListTag lore = new net.minecraft.nbt.ListTag();
-        String loreJson = "{\"text\":\"\u00a77\u5171 " + total + " \u4e2a\",\"italic\":false}";
-        lore.add(net.minecraft.nbt.StringTag.valueOf(loreJson));
+        lore.add(loreLine("\u00a77\u5171 \u00a7a" + total + " \u00a77\u4e2a"));
+        for (int i = 0; i < existing.size(); i++) lore.add(existing.get(i));
         display.put("Lore", lore);
         tag.put("display", display);
     }
