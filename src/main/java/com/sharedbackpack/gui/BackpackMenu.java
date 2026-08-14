@@ -5,26 +5,25 @@ import com.sharedbackpack.backpack.SharedBackpack;
 import com.sharedbackpack.backpack.TeamResolver;
 import com.sharedbackpack.commands.PinyinSearch;
 import com.sharedbackpack.database.DatabaseManager;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.chat.Component;
-import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.Container;
-import net.minecraft.world.MenuProvider;
-import net.minecraft.world.entity.player.Inventory;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.ClickType;
-import net.minecraft.world.inventory.MenuType;
-import net.minecraft.world.inventory.Slot;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
-import net.minecraftforge.items.ItemStackHandler;
+import net.minecraft.util.registry.Registry;
+import net.minecraft.nbt.NbtCompound;
+import net.minecraft.text.LiteralText;
+import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.entity.player.PlayerInventory;
+import net.minecraft.inventory.SimpleInventory;
+import net.minecraft.screen.NamedScreenHandlerFactory;
+import net.minecraft.screen.ScreenHandler;
+import net.minecraft.screen.ScreenHandlerType;
+import net.minecraft.screen.slot.Slot;
+import net.minecraft.screen.slot.SlotActionType;
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 
 import java.util.*;
 
-public class BackpackMenu extends AbstractContainerMenu {
+public class BackpackMenu extends ScreenHandler {
     private static final int ITEMS_PER_PAGE = 45;
     private static final int GUI_SLOTS = 54;
     private static final int GUI_SLOTS_UNLOAD = 45;
@@ -35,9 +34,9 @@ public class BackpackMenu extends AbstractContainerMenu {
 
     private static final Map<String, Integer> PLAYER_SORT_PREF = new HashMap<>();
 
-    private final ItemStackHandler handler;
+    private final SimpleInventory handler;
     private final String teamId;
-    private final ServerPlayer player;
+    private final ServerPlayerEntity player;
     private final int maxPages;
     private final String searchFilter;
     private final boolean unloadMode;
@@ -55,14 +54,14 @@ public class BackpackMenu extends AbstractContainerMenu {
     // slotTotalCount: gui slot index -> total stacked count (for stacked display)
     private final Map<Integer, Integer> slotTotalCount = new HashMap<>();
 
-    public BackpackMenu(int id, ServerPlayer player, String teamId, int page, int maxPages,
+    public BackpackMenu(int id, ServerPlayerEntity player, String teamId, int page, int maxPages,
                         String searchFilter, boolean unloadMode, boolean isBox, String boxOwner) {
-        super(unloadMode ? MenuType.GENERIC_9x5 : MenuType.GENERIC_9x6, id);
+        super(unloadMode ? ScreenHandlerType.GENERIC_9X5 : ScreenHandlerType.GENERIC_9X6, id);
         this.player = player; this.teamId = teamId; this.page = page; this.maxPages = maxPages;
         this.searchFilter = searchFilter; this.unloadMode = unloadMode;
         this.isBox = isBox; this.boxOwner = boxOwner;
-        this.handler = new ItemStackHandler(unloadMode ? GUI_SLOTS_UNLOAD : GUI_SLOTS);
-        this.displaySort = PLAYER_SORT_PREF.getOrDefault(player.getStringUUID(), 0);
+        this.handler = new SimpleInventory(unloadMode ? GUI_SLOTS_UNLOAD : GUI_SLOTS);
+        this.displaySort = PLAYER_SORT_PREF.getOrDefault(player.getUuidAsString(), 0);
 
         int total = unloadMode ? GUI_SLOTS_UNLOAD : GUI_SLOTS;
         for (int i = 0; i < total; i++) addSlot(new BpSlot(i, 8 + (i%9)*18, 18 + (i/9)*18));
@@ -71,14 +70,14 @@ public class BackpackMenu extends AbstractContainerMenu {
         int invY = 18 + rows*18 + 13, hotbarY = invY + 3*18 + 4;
         for (int r = 0; r < 3; r++)
             for (int c = 0; c < 9; c++)
-                addSlot(new Slot(player.getInventory(), c+r*9+9, 8+c*18, invY+r*18));
-        for (int c = 0; c < 9; c++) addSlot(new Slot(player.getInventory(), c, 8+c*18, hotbarY));
+                addSlot(new Slot(player.inventory, c+r*9+9, 8+c*18, invY+r*18));
+        for (int c = 0; c < 9; c++) addSlot(new Slot(player.inventory, c, 8+c*18, hotbarY));
         loadPage();
     }
 
     // ===== DB access helpers =====
     private List<DatabaseManager.BackpackItem> dbItems() {
-        if (unloadMode) return List.of();
+        if (unloadMode) return Collections.emptyList();
         return isBox ? SharedBackpackMod.database.getBoxItems(boxOwner, teamId)
                      : SharedBackpackMod.database.getItems(teamId);
     }
@@ -98,7 +97,10 @@ public class BackpackMenu extends AbstractContainerMenu {
         return isBox ? SharedBackpackMod.database.setBoxItem(boxOwner, teamId, slot, iid, cnt, nbt, name)
                      : SharedBackpackMod.database.setItem(teamId, slot, iid, cnt, nbt, name);
     }
-    private boolean dbUpgrade() { return SharedBackpackMod.database.upgradePages(teamId, 1); }
+    private boolean dbUpgrade() {
+        return isBox ? SharedBackpackMod.database.upgradeBoxPages(boxOwner, teamId, 1)
+                : SharedBackpackMod.database.upgradePages(teamId, 1);
+    }
     private void dbSortAll() {
         if (isBox) SharedBackpackMod.database.sortBoxItems(boxOwner, teamId);
         else SharedBackpackMod.database.sortItems(teamId);
@@ -123,9 +125,9 @@ public class BackpackMenu extends AbstractContainerMenu {
     private int invEnd()   { return unloadMode ? INV_END_UNLOAD : INV_END_NORMAL; }
 
     static void stripDisplay(ItemStack stack) {
-        CompoundTag t = stack.getTag(); if (t == null) return;
+        NbtCompound t = stack.getTag(); if (t == null) return;
         boolean d = false;
-        if (t.contains("display")) { CompoundTag dp = t.getCompound("display");
+        if (t.contains("display")) { NbtCompound dp = t.getCompound("display");
             if (dp.contains("Lore")) { dp.remove("Lore"); d = true; }
             if (dp.contains("Name")) { dp.remove("Name"); d = true; }
             if (dp.isEmpty()) { t.remove("display"); d = true; } }
@@ -135,9 +137,9 @@ public class BackpackMenu extends AbstractContainerMenu {
     // Strip display metadata (Name + Lore) from item NBT for DB storage
     static String nbtForStorage(ItemStack stack) {
         if (!stack.hasTag()) return null;
-        CompoundTag copy = stack.getTag().copy();
+        NbtCompound copy = stack.getTag().copy();
         if (copy.contains("display")) {
-            CompoundTag dp = copy.getCompound("display");
+            NbtCompound dp = copy.getCompound("display");
             dp.remove("Name"); dp.remove("Lore");
             if (dp.isEmpty()) copy.remove("display");
         }
@@ -146,9 +148,9 @@ public class BackpackMenu extends AbstractContainerMenu {
 
     static void setMeta(ItemStack stack, DatabaseManager.BackpackItem item) {
         if (item.placedBy == null) return;
-        CompoundTag tag = stack.getOrCreateTag();
-        CompoundTag display = tag.contains("display") ? tag.getCompound("display") : new CompoundTag();
-        net.minecraft.nbt.ListTag lore = new net.minecraft.nbt.ListTag();
+        NbtCompound tag = stack.getOrCreateTag();
+        NbtCompound display = tag.contains("display") ? tag.getCompound("display") : new NbtCompound();
+        net.minecraft.nbt.NbtList lore = new net.minecraft.nbt.NbtList();
         lore.add(loreLine("\u00a78\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"));
         lore.add(loreLine("\u00a77\u653e\u5165: \u00a7e" + item.placedBy
                 + (item.placedTime != null ? "  \u00a78" + fmtTime(item.placedTime) : "")));
@@ -169,26 +171,36 @@ public class BackpackMenu extends AbstractContainerMenu {
         return t;
     }
 
-    private static net.minecraft.nbt.StringTag loreLine(String text) {
+    private static net.minecraft.nbt.NbtString loreLine(String text) {
         String esc = text.replace("\\", "\\\\").replace("\"", "\\\"");
-        return net.minecraft.nbt.StringTag.valueOf("{\"text\":\"" + esc + "\",\"italic\":false}");
+        return net.minecraft.nbt.NbtString.of("{\"text\":\"" + esc + "\",\"italic\":false}");
     }
 
     private List<DatabaseManager.BackpackItem> applySortOrder(List<DatabaseManager.BackpackItem> items) {
         List<DatabaseManager.BackpackItem> sorted = new ArrayList<>(items);
         switch (displaySort) {
-            case 1 -> sorted.sort((a, b) -> Integer.compare(b.count, a.count));
-            case 2 -> sorted.sort(Comparator.comparingInt(it -> it.count));
-            case 3 -> sorted.sort((a, b) -> {
+            case 1:
+                sorted.sort((a, b) -> Integer.compare(b.count, a.count));
+                break;
+            case 2:
+                sorted.sort(Comparator.comparingInt(it -> it.count));
+                break;
+            case 3:
+                sorted.sort((a, b) -> {
                 String ta = a.lastModifiedTime != null ? a.lastModifiedTime : (a.placedTime != null ? a.placedTime : "");
                 String tb = b.lastModifiedTime != null ? b.lastModifiedTime : (b.placedTime != null ? b.placedTime : "");
                 return tb.compareTo(ta);
             });
-            case 4 -> sorted.sort((a, b) -> {
+                break;
+            case 4:
+                sorted.sort((a, b) -> {
                 String ta = a.lastModifiedTime != null ? a.lastModifiedTime : (a.placedTime != null ? a.placedTime : "");
                 String tb = b.lastModifiedTime != null ? b.lastModifiedTime : (b.placedTime != null ? b.placedTime : "");
                 return ta.compareTo(tb);
             });
+                break;
+            default:
+                break;
         }
         return sorted;
     }
@@ -199,7 +211,7 @@ public class BackpackMenu extends AbstractContainerMenu {
         loading = true;
         try {
             int ts = unloadMode ? GUI_SLOTS_UNLOAD : GUI_SLOTS;
-            for (int i = 0; i < ts; i++) handler.setStackInSlot(i, ItemStack.EMPTY);
+            for (int i = 0; i < ts; i++) handler.setStack(i, ItemStack.EMPTY);
 
             int startSlot = page * ITEMS_PER_PAGE;
             List<DatabaseManager.BackpackItem> items = dbItems();
@@ -228,14 +240,14 @@ public class BackpackMenu extends AbstractContainerMenu {
                     viewMaxPages = Math.max(1, (items.size() + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE);
                     if (page >= viewMaxPages) page = viewMaxPages - 1;
                     Map<String, Integer> totalByKey = new LinkedHashMap<>();
-                    for (var item : items) {
+                    for (DatabaseManager.BackpackItem item : items) {
                         String key = item.itemId + "\0" + (item.nbt != null ? item.nbt : "");
                         totalByKey.merge(key, item.count, Integer::sum);
                     }
                     int start = page * ITEMS_PER_PAGE;
                     int loc = 0;
                     for (int ii = start; ii < items.size() && loc < ITEMS_PER_PAGE; ii++) {
-                        var item = items.get(ii);
+                        DatabaseManager.BackpackItem item = items.get(ii);
                         slotMap.put(loc, item.slot);
                         String key = item.itemId + "\0" + (item.nbt != null ? item.nbt : "");
                         int total = totalByKey.getOrDefault(key, item.count);
@@ -245,20 +257,20 @@ public class BackpackMenu extends AbstractContainerMenu {
                             slotTotalCount.put(loc, total);
                             setStackedCountLore(st, total);
                         }
-                        handler.setStackInSlot(loc, st);
+                        handler.setStack(loc, st);
                         loaded++; loc++;
                     }
                 } else {
                     // Normal view: positional rendering by DB slot
                     viewMaxPages = maxPages;
                     Map<String, Integer> totalByKey = new LinkedHashMap<>();
-                    for (var item : items) {
+                    for (DatabaseManager.BackpackItem item : items) {
                         int loc = item.slot - startSlot;
                         if (loc < 0) continue; if (loc >= ITEMS_PER_PAGE) break;
                         String key = item.itemId + "\0" + (item.nbt != null ? item.nbt : "");
                         totalByKey.merge(key, item.count, Integer::sum);
                     }
-                    for (var item : items) {
+                    for (DatabaseManager.BackpackItem item : items) {
                         int loc = item.slot - startSlot;
                         if (loc < 0) continue; if (loc >= ITEMS_PER_PAGE) break;
                         String key = item.itemId + "\0" + (item.nbt != null ? item.nbt : "");
@@ -269,7 +281,7 @@ public class BackpackMenu extends AbstractContainerMenu {
                             slotTotalCount.put(loc, total);
                             setStackedCountLore(st, total);
                         }
-                        handler.setStackInSlot(loc, st);
+                        handler.setStack(loc, st);
                         loaded++;
                     }
                 }
@@ -283,11 +295,11 @@ public class BackpackMenu extends AbstractContainerMenu {
     }
 
     static void setStackedCountLore(ItemStack stack, int total) {
-        CompoundTag tag = stack.getOrCreateTag();
-        CompoundTag display = tag.contains("display") ? tag.getCompound("display") : new CompoundTag();
+        NbtCompound tag = stack.getOrCreateTag();
+        NbtCompound display = tag.contains("display") ? tag.getCompound("display") : new NbtCompound();
         // Prepend stacked count, keep existing lore (meta info) below
-        net.minecraft.nbt.ListTag existing = display.contains("Lore") ? display.getList("Lore", 8) : new net.minecraft.nbt.ListTag();
-        net.minecraft.nbt.ListTag lore = new net.minecraft.nbt.ListTag();
+        net.minecraft.nbt.NbtList existing = display.contains("Lore") ? display.getList("Lore", 8) : new net.minecraft.nbt.NbtList();
+        net.minecraft.nbt.NbtList lore = new net.minecraft.nbt.NbtList();
         lore.add(loreLine("\u00a77\u5171 \u00a7a" + total + " \u00a77\u4e2a"));
         for (int i = 0; i < existing.size(); i++) lore.add(existing.get(i));
         display.put("Lore", lore);
@@ -296,36 +308,36 @@ public class BackpackMenu extends AbstractContainerMenu {
 
     private void populateControlBar(int loaded) {
         if (page > 0) {
-            ItemStack p = new ItemStack(Items.ARROW); p.setHoverName(Component.literal("\u00a76\u25c0 \u4e0a\u4e00\u9875"));
-            handler.setStackInSlot(PREV_SLOT, p);
+            ItemStack p = new ItemStack(Items.ARROW); p.setCustomName(new LiteralText("\u00a76\u25c0 \u4e0a\u4e00\u9875"));
+            handler.setStack(PREV_SLOT, p);
         }
         ItemStack pi = new ItemStack(Items.PAPER);
-        pi.setHoverName(Component.literal("\u00a7e\u7b2c " + (page+1) + " / " + viewMaxPages + " \u9875"));
-        handler.setStackInSlot(PAGE_SLOT, pi);
+        pi.setCustomName(new LiteralText("\u00a7e\u7b2c " + (page+1) + " / " + viewMaxPages + " \u9875"));
+        handler.setStack(PAGE_SLOT, pi);
         ItemStack ci = new ItemStack(Items.BOOK);
-        ci.setHoverName(Component.literal("\u00a7e\u7269\u54c1: " + dbTotal() + " \u4ef6"));
-        handler.setStackInSlot(COUNT_SLOT, ci);
+        ci.setCustomName(new LiteralText("\u00a7e\u7269\u54c1: " + dbTotal() + " \u4ef6"));
+        handler.setStack(COUNT_SLOT, ci);
 
         String dn = teamId;
         if (isBox && teamId.contains(":")) dn = teamId.substring(teamId.lastIndexOf(':')+1);
         ItemStack ti = new ItemStack(isBox ? Items.CHEST : Items.NAME_TAG);
-        ti.setHoverName(Component.literal("\u00a7a" + (isBox ? "\u76d2\u5b50:"+dn+" \u00a77(\u70b9\u51fb\u8fd4\u56de\u961f\u4f0d)" : "\u961f\u4f0d: "+dn+" \u00a77(\u70b9\u51fb\u7ba1\u7406\u76d2\u5b50)")));
-        handler.setStackInSlot(TEAM_SLOT, ti);
+        ti.setCustomName(new LiteralText("\u00a7a" + (isBox ? "\u76d2\u5b50:"+dn+" \u00a77(\u70b9\u51fb\u8fd4\u56de\u961f\u4f0d)" : "\u961f\u4f0d: "+dn+" \u00a77(\u70b9\u51fb\u7ba1\u7406\u76d2\u5b50)")));
+        handler.setStack(TEAM_SLOT, ti);
 
         if (currentMenu instanceof ModMenuPage) {
-            ItemStack bk = new ItemStack(Items.BARRIER); bk.setHoverName(Component.literal("\u00a7c\u8fd4\u56de\u5168\u90e8"));
-            handler.setStackInSlot(MOD_SLOT, bk);
+            ItemStack bk = new ItemStack(Items.BARRIER); bk.setCustomName(new LiteralText("\u00a7c\u8fd4\u56de\u5168\u90e8"));
+            handler.setStack(MOD_SLOT, bk);
         } else if (currentMenu instanceof BoxMenuPage) {
-            ItemStack bk = new ItemStack(Items.BARRIER); bk.setHoverName(Component.literal("\u00a7c\u8fd4\u56de\u80cc\u5305"));
-            handler.setStackInSlot(MOD_SLOT, bk);
+            ItemStack bk = new ItemStack(Items.BARRIER); bk.setCustomName(new LiteralText("\u00a7c\u8fd4\u56de\u80cc\u5305"));
+            handler.setStack(MOD_SLOT, bk);
         } else if (modFilter != null) {
             ItemStack ic = getModIcon(modFilter);
-            ic.setHoverName(Component.literal("\u00a76\u5206\u7c7b: " + modFilter + " \u00a77(\u70b9\u51fb\u5c55\u5f00\u83dc\u5355)"));
-            handler.setStackInSlot(MOD_SLOT, ic);
+            ic.setCustomName(new LiteralText("\u00a76\u5206\u7c7b: " + modFilter + " \u00a77(\u70b9\u51fb\u5c55\u5f00\u83dc\u5355)"));
+            handler.setStack(MOD_SLOT, ic);
         } else {
             ItemStack am = new ItemStack(Items.BOOKSHELF);
-            am.setHoverName(Component.literal("\u00a76\u5206\u7c7b: \u5168\u90e8 \u00a77(\u70b9\u51fb\u5c55\u5f00\u83dc\u5355)"));
-            handler.setStackInSlot(MOD_SLOT, am);
+            am.setCustomName(new LiteralText("\u00a76\u5206\u7c7b: \u5168\u90e8 \u00a77(\u70b9\u51fb\u5c55\u5f00\u83dc\u5355)"));
+            handler.setStack(MOD_SLOT, am);
         }
 
         // SEARCH_SLOT: sort-order toggle (shows search info too if active)
@@ -334,55 +346,55 @@ public class BackpackMenu extends AbstractContainerMenu {
         if (searchFilter != null && !searchFilter.isEmpty()) {
             ItemStack si = new ItemStack(Items.COMPASS);
             String suf = displaySort != 0 ? " \u00a77[" + sortLabels[displaySort] + "\u00a77]" : "";
-            si.setHoverName(Component.literal("\u00a7d\u641c\u7d22: " + searchFilter + suf + " \u00a78(\u70b9\u51fb\u5207\u6362\u6392\u5e8f)"));
-            handler.setStackInSlot(SEARCH_SLOT, si);
+            si.setCustomName(new LiteralText("\u00a7d\u641c\u7d22: " + searchFilter + suf + " \u00a78(\u70b9\u51fb\u5207\u6362\u6392\u5e8f)"));
+            handler.setStack(SEARCH_SLOT, si);
         } else {
             ItemStack si = new ItemStack(sortIcons[displaySort]);
-            si.setHoverName(Component.literal(sortLabels[displaySort] + " \u00a77(\u70b9\u51fb\u5207\u6362)"));
-            handler.setStackInSlot(SEARCH_SLOT, si);
+            si.setCustomName(new LiteralText(sortLabels[displaySort] + " \u00a77(\u70b9\u51fb\u5207\u6362)"));
+            handler.setStack(SEARCH_SLOT, si);
         }
         ItemStack sb = new ItemStack(Items.HOPPER);
-        sb.setHoverName(Component.literal("\u00a76\u6574\u7406\u7269\u54c1 \u00a77(\u5de6\u952e=\u5168\u90e8 \u53f3\u952e=\u5f53\u524d\u9875)"));
-        handler.setStackInSlot(SORT_SLOT, sb);
+        sb.setCustomName(new LiteralText("\u00a76\u6574\u7406\u7269\u54c1 \u00a77(\u5de6\u952e=\u5168\u90e8 \u53f3\u952e=\u5f53\u524d\u9875)"));
+        handler.setStack(SORT_SLOT, sb);
         ItemStack ug = new ItemStack(Items.DIAMOND);
-        ug.setHoverName(Component.literal("\u00a7b\u5347\u7ea7\u80cc\u5305 [+1\u9875] \u00a77\u9700\u8981 1 \u94bb\u77f3"));
-        handler.setStackInSlot(UPGRADE_SLOT, ug);
+        ug.setCustomName(new LiteralText("\u00a7b\u5347\u7ea7\u80cc\u5305 [+1\u9875] \u00a77\u9700\u8981 1 \u94bb\u77f3"));
+        handler.setStack(UPGRADE_SLOT, ug);
         if (page < viewMaxPages - 1) {
             ItemStack nx = new ItemStack(Items.ARROW);
-            nx.setHoverName(Component.literal("\u00a76\u4e0b\u4e00\u9875 \u25b6"));
-            handler.setStackInSlot(NEXT_SLOT, nx);
+            nx.setCustomName(new LiteralText("\u00a76\u4e0b\u4e00\u9875 \u25b6"));
+            handler.setStack(NEXT_SLOT, nx);
         }
     }
 
     private ItemStack getModIcon(String ns) {
-        for (var it : dbItems()) {
+        for (DatabaseManager.BackpackItem it : dbItems()) {
             String n = it.itemId.contains(":")?it.itemId.split(":",2)[0]:"minecraft";
             if (n.equals(ns)) return SharedBackpack.toItemStack(it);
         }
         return new ItemStack(Items.BOOKSHELF);
     }
 
-    private void refreshPage() { loadPage(); broadcastChanges(); }
+    private void refreshPage() { loadPage(); sendContentUpdates(); }
     private void navigateToPage(int np) { stashCarried(); page = np; refreshPage(); }
-    private void cycleSortMode() { displaySort = (displaySort + 1) % 5; PLAYER_SORT_PREF.put(player.getStringUUID(), displaySort); page = 0; refreshPage(); }
+    private void cycleSortMode() { displaySort = (displaySort + 1) % 5; PLAYER_SORT_PREF.put(player.getUuidAsString(), displaySort); page = 0; refreshPage(); }
 
     private void stashCarried() {
-        ItemStack c = getCarried(); if (c.isEmpty()) return;
+        ItemStack c = player.inventory.getCursorStack(); if (c.isEmpty()) return;
         int ms = unloadMode ? GUI_SLOTS_UNLOAD : ITEMS_PER_PAGE;
         for (int i = 0; i < ms && !c.isEmpty(); i++) {
-            Slot s = getSlot(i); if (s == null || !s.hasItem()) continue;
-            if (!tagsMatchIgnore(c, s.getItem())) continue;
-            int ca = Math.min(c.getCount(), 64 - s.getItem().getCount());
+            Slot s = getSlot(i); if (s == null || !s.hasStack()) continue;
+            if (!tagsMatchIgnore(c, s.getStack())) continue;
+            int ca = Math.min(c.getCount(), 64 - s.getStack().getCount());
             if (ca <= 0) continue;
-            ItemStack m = s.getItem().copy(); m.grow(ca); c.shrink(ca); s.set(m);
+            ItemStack m = s.getStack().copy(); m.increment(ca); c.decrement(ca); s.setStack(m);
         }
         for (int i = 0; i < ms && !c.isEmpty(); i++) {
-            Slot s = getSlot(i); if (s.hasItem()) continue;
+            Slot s = getSlot(i); if (s.hasStack()) continue;
             int tp = Math.min(c.getCount(), 64);
-            ItemStack cp = c.copy(); cp.setCount(tp); c.shrink(tp); s.set(cp);
+            ItemStack cp = c.copy(); cp.setCount(tp); c.decrement(tp); s.setStack(cp);
         }
-        if (!c.isEmpty() && !player.getInventory().add(c)) player.drop(c, false);
-        setCarried(ItemStack.EMPTY);
+        if (!c.isEmpty() && !player.inventory.insertStack(c)) player.dropItem(c, false);
+        player.inventory.setCursorStack(ItemStack.EMPTY);
     }
 
     private void toggleModMenu() {
@@ -399,60 +411,66 @@ public class BackpackMenu extends AbstractContainerMenu {
     // ===== Click handling =====
 
     @Override
-    public void clicked(int slotId, int button, ClickType clickType, Player clickPlayer) {
+    public ItemStack onSlotClick(int slotId, int button, SlotActionType clickType, PlayerEntity clickPlayer) {
         if (currentMenu != null && slotId >= 0 && slotId < ITEMS_PER_PAGE) {
             currentMenu.onClick(slotId, this);
-            return;
+            return ItemStack.EMPTY;
         }
 
         if (!unloadMode && slotId >= 0 && slotId < GUI_SLOTS && isControlSlot(slotId)) {
-            if (inMenu() && slotId == MOD_SLOT) { stashCarried(); currentMenu = null; refreshPage(); return; }
+            if (inMenu() && slotId == MOD_SLOT) { stashCarried(); currentMenu = null; refreshPage(); return ItemStack.EMPTY; }
             if (!inMenu()) {
-                if (slotId == PREV_SLOT && page > 0) { navigateToPage(page-1); return; }
-                if (slotId == NEXT_SLOT && page < viewMaxPages-1) { navigateToPage(page+1); return; }
-                if (slotId == SEARCH_SLOT) { cycleSortMode(); return; }
-                if (slotId == UPGRADE_SLOT) { doUpgrade(); return; }
-                if (slotId == SORT_SLOT) { handleSort(button); return; }
-                if (slotId == MOD_SLOT) { toggleModMenu(); return; }
+                if (slotId == PREV_SLOT && page > 0) { navigateToPage(page-1); return ItemStack.EMPTY; }
+                if (slotId == NEXT_SLOT && page < viewMaxPages-1) { navigateToPage(page+1); return ItemStack.EMPTY; }
+                if (slotId == SEARCH_SLOT) { cycleSortMode(); return ItemStack.EMPTY; }
+                if (slotId == UPGRADE_SLOT) { doUpgrade(); return ItemStack.EMPTY; }
+                if (slotId == SORT_SLOT) { handleSort(button); return ItemStack.EMPTY; }
+                if (slotId == MOD_SLOT) { toggleModMenu(); return ItemStack.EMPTY; }
                 if (slotId == TEAM_SLOT && isBox) {
-                    stashCarried(); player.getServer().execute(() -> openTeam(player, searchFilter)); return;
+                    stashCarried(); player.server.execute(() -> openTeam(player, searchFilter)); return ItemStack.EMPTY;
                 }
-                if (slotId == TEAM_SLOT && !isBox) { toggleBoxMenu(); return; }
+                if (slotId == TEAM_SLOT && !isBox) { toggleBoxMenu(); return ItemStack.EMPTY; }
             }
-            return;
+            return ItemStack.EMPTY;
         }
 
         int max = (unloadMode||inMenu())?GUI_SLOTS_UNLOAD:ITEMS_PER_PAGE;
-        if (slotId >= 0 && slotId < max && clickType == ClickType.PICKUP) {
+        if (slotId >= 0 && slotId < max && clickType == SlotActionType.PICKUP) {
             Slot s = getSlot(slotId);
-            ItemStack cur = getCarried();
+            ItemStack cur = player.inventory.getCursorStack();
             // In menu view (mod/box picker), item slots are UI - no interaction
-            if (isMenuView()) return;
-            if (s != null && s.hasItem() && s.mayPickup(clickPlayer)) {
+            if (isMenuView()) return ItemStack.EMPTY;
+            if (s != null && s.hasStack() && s.canTakeItems(clickPlayer)) {
                 if (button == 0 && cur.isEmpty()) {
-                    ItemStack ex = s.safeTake(1, 64, clickPlayer);
-                    if (!ex.isEmpty()) setCarried(ex);
-                    return;
+                    ItemStack ex = s.takeStack(1);
+                    if (!ex.isEmpty()) {
+                        s.onTakeItem(clickPlayer, ex);
+                        player.inventory.setCursorStack(ex);
+                    }
+                    return ItemStack.EMPTY;
                 }
                 if (button == 1 && cur.isEmpty()) {
-                    int mx = s.getItem().getMaxStackSize();
-                    ItemStack ex = s.safeTake(mx, mx, clickPlayer);
-                    if (!ex.isEmpty()) setCarried(ex);
-                    return;
+                    int mx = s.getStack().getMaxCount();
+                    ItemStack ex = s.takeStack(mx);
+                    if (!ex.isEmpty()) {
+                        s.onTakeItem(clickPlayer, ex);
+                        player.inventory.setCursorStack(ex);
+                    }
+                    return ItemStack.EMPTY;
                 }
             }
             // Placing carried item: in alt view (search/mod-filter), use dbAdd instead of slot-based set
             if (!cur.isEmpty() && isAltView()) {
-                String iid = BuiltInRegistries.ITEM.getKey(cur.getItem()).toString();
+                String iid = Registry.ITEM.getId(cur.getItem()).toString();
                 String nbt = nbtForStorage(cur);
-                if (dbAdd(iid, cur.getCount(), nbt, player.getScoreboardName())) {
-                    setCarried(ItemStack.EMPTY);
+                if (dbAdd(iid, cur.getCount(), nbt, player.getEntityName())) {
+                    player.inventory.setCursorStack(ItemStack.EMPTY);
                     refreshPage();
                 }
-                return;
+                return ItemStack.EMPTY;
             }
         }
-        super.clicked(slotId, button, clickType, clickPlayer);
+        return super.onSlotClick(slotId, button, clickType, clickPlayer);
     }
 
     private void handleSort(int button) {
@@ -460,67 +478,67 @@ public class BackpackMenu extends AbstractContainerMenu {
             long now = System.currentTimeMillis();
             sortClicks[sortClickIdx%3] = now; sortClickIdx++;
             boolean t3 = sortClickIdx >= 3 && (now - sortClicks[(sortClickIdx-3)%3]) < 1500;
-            if (t3) { dbSortAll(); player.sendSystemMessage(Component.literal("\u00a7a\u5168\u80cc\u5305\u5df2\u6574\u7406\uff01")); }
-            else { dbSortPage(page); player.sendSystemMessage(Component.literal("\u00a7a\u5f53\u524d\u9875\u5df2\u6574\u7406\uff01")); }
+            if (t3) { dbSortAll(); player.sendMessage(new LiteralText("\u00a7a\u5168\u80cc\u5305\u5df2\u6574\u7406\uff01"), false); }
+            else { dbSortPage(page); player.sendMessage(new LiteralText("\u00a7a\u5f53\u524d\u9875\u5df2\u6574\u7406\uff01"), false); }
         } else {
             dbSortAll();
-            player.sendSystemMessage(Component.literal("\u00a7a\u7269\u54c1\u5df2\u6574\u7406\uff01"));
+            player.sendMessage(new LiteralText("\u00a7a\u7269\u54c1\u5df2\u6574\u7406\uff01"), false);
         }
         refreshPage();
     }
 
     private void doUpgrade() {
-        for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
-            ItemStack s = player.getInventory().getItem(i);
+        for (int i = 0; i < player.inventory.size(); i++) {
+            ItemStack s = player.inventory.getStack(i);
             if (s.getItem()==Items.DIAMOND && s.getCount()>=1) {
-                s.shrink(1); dbUpgrade();
-                player.sendSystemMessage(Component.literal("\u00a7a\u80cc\u5305\u5df2\u5347\u7ea7\uff01"));
+                s.decrement(1); dbUpgrade();
+                player.sendMessage(new LiteralText("\u00a7a\u80cc\u5305\u5df2\u5347\u7ea7\uff01"), false);
                 stashCarried();
-                player.getServer().execute(() -> openForPlayer(player, searchFilter, page, false, isBox, boxOwner));
+                player.server.execute(() -> openForPlayer(player, searchFilter, page, false, isBox, boxOwner));
                 return;
             }
         }
-        player.sendSystemMessage(Component.literal("\u00a7c\u9700\u8981 1 \u4e2a\u94bb\u77f3\u6765\u5347\u7ea7\u80cc\u5305\uff01"));
+        player.sendMessage(new LiteralText("\u00a7c\u9700\u8981 1 \u4e2a\u94bb\u77f3\u6765\u5347\u7ea7\u80cc\u5305\uff01"), false);
     }
 
     private void doCreateBox() {
         String owner = TeamResolver.resolvePrimaryTeam(player);
-        var exist = SharedBackpackMod.database.listBoxes(owner);
+        List<String> exist = SharedBackpackMod.database.listBoxes(owner);
         int n = exist.size()+1; String name;
         do { name = "\u76d2\u5b50" + n; n++; } while (exist.contains(name));
         SharedBackpackMod.database.createBox(owner, name);
-        player.sendSystemMessage(Component.literal("\u00a7a\u5df2\u521b\u5efa\u76d2\u5b50: " + name));
+        player.sendMessage(new LiteralText("\u00a7a\u5df2\u521b\u5efa\u76d2\u5b50: " + name), false);
         currentMenu = null; stashCarried();
         String fn = name, fo = owner;
-        player.getServer().execute(() -> openForPlayer(player, searchFilter, 0, false, true, fo+":"+fn));
+        player.server.execute(() -> openForPlayer(player, searchFilter, 0, false, true, fo+":"+fn));
     }
 
     // ===== Quick move =====
 
     static boolean tagsMatchIgnore(ItemStack a, ItemStack b) {
         if (a.getItem() != b.getItem()) return false;
-        CompoundTag t1 = a.hasTag()?a.getTag().copy():null;
+        NbtCompound t1 = a.hasTag()?a.getTag().copy():null;
         if (t1!=null){t1.remove("display");if(t1.isEmpty())t1=null;}
-        CompoundTag t2 = b.hasTag()?b.getTag().copy():null;
+        NbtCompound t2 = b.hasTag()?b.getTag().copy():null;
         if (t2!=null){t2.remove("display");if(t2.isEmpty())t2=null;}
         return (t1==null&&t2==null)||(t1!=null&&t1.equals(t2));
     }
 
     @Override
-    public ItemStack quickMoveStack(Player mp, int index) {
+    public ItemStack transferSlot(PlayerEntity mp, int index) {
         Slot s = getSlot(index);
-        if (s == null || !s.hasItem()) return ItemStack.EMPTY;
+        if (s == null || !s.hasStack()) return ItemStack.EMPTY;
         if (!unloadMode && !inMenu() && isControlSlot(index)) return ItemStack.EMPTY;
         if (inMenu() && isControlSlot(index)) return ItemStack.EMPTY;
 
-        ItemStack src = s.getItem().copy();
+        ItemStack src = s.getStack().copy();
         ItemStack orig = src.copy();
 
         if (index < (unloadMode ? GUI_SLOTS_UNLOAD : GUI_SLOTS)) {
             // Shift-click from backpack -> player inventory
             ItemStack toMove = src.copy();
             stripDisplay(toMove);
-            if (!moveItemStackTo(toMove, invStart(), invEnd(), true)) return ItemStack.EMPTY;
+            if (!insertItem(toMove, invStart(), invEnd(), true)) return ItemStack.EMPTY;
             // How many were moved?
             int moved = src.getCount() - toMove.getCount();
             if (moved <= 0) return ItemStack.EMPTY;
@@ -529,75 +547,94 @@ public class BackpackMenu extends AbstractContainerMenu {
             dbRemove(dbSlot, moved);
             // Update handler
             if (moved >= src.getCount()) {
-                handler.setStackInSlot(index, ItemStack.EMPTY);
+                handler.setStack(index, ItemStack.EMPTY);
             } else {
                 ItemStack rem = src.copy(); rem.setCount(src.getCount() - moved);
-                handler.setStackInSlot(index, rem);
+                handler.setStack(index, rem);
             }
         } else {
             // Shift-click from player inventory -> backpack (works in all views)
-            String iid = BuiltInRegistries.ITEM.getKey(src.getItem()).toString();
+            String iid = Registry.ITEM.getId(src.getItem()).toString();
             String nbt = nbtForStorage(src);
-            boolean added = dbAdd(iid, src.getCount(), nbt, player.getScoreboardName());
+            boolean added = dbAdd(iid, src.getCount(), nbt, player.getEntityName());
             if (!added) return ItemStack.EMPTY;
-            s.set(ItemStack.EMPTY);
+            s.setStack(ItemStack.EMPTY);
             refreshPage();
             return orig;
         }
         // Sync source slot for backpack->inventory direction
-        if (handler.getStackInSlot(index).isEmpty()) {
-            s.set(ItemStack.EMPTY);
+        if (handler.getStack(index).isEmpty()) {
+            s.setStack(ItemStack.EMPTY);
         } else {
             // force client sync
-            broadcastChanges();
+            sendContentUpdates();
         }
         refreshPage();
         return orig;
     }
 
-    @Override public boolean stillValid(Player p) { return true; }
+    @Override public boolean canUse(PlayerEntity p) { return true; }
 
     // ===== Static factory =====
 
-    public static void openTeam(ServerPlayer player, String search) { openForPlayer(player, search, 0, false, false, null); }
-    public static void openForPlayer(ServerPlayer player, String search) { openForPlayer(player, search, 0, false, false, null); }
-    public static void openForPlayer(ServerPlayer player, String search, int page, boolean unload, boolean isBox, String boxOwner) {
-        String tid = isBox ? (boxOwner!=null?boxOwner:TeamResolver.resolvePrimaryTeam(player)) : TeamResolver.resolvePrimaryTeam(player);
-        int mp = isBox ? SharedBackpackMod.database.getBoxMaxPages(tid, tid) : SharedBackpackMod.database.getMaxPages(tid);
+    public static void openTeam(ServerPlayerEntity player, String search) { openForPlayer(player, search, 0, false, false, null); }
+    public static void openForPlayer(ServerPlayerEntity player, String search) { openForPlayer(player, search, 0, false, false, null); }
+    public static void openForPlayer(ServerPlayerEntity player, String search, int page, boolean unload, boolean isBox, String boxOwner) {
+        String owner = TeamResolver.resolvePrimaryTeam(player);
+        String tid = owner;
+        String storageOwner = null;
+        if (isBox) {
+            String target = boxOwner != null ? boxOwner : owner;
+            int separator = target.indexOf(':');
+            if (separator > 0) {
+                storageOwner = target.substring(0, separator);
+                tid = target.substring(separator + 1);
+            } else {
+                storageOwner = owner;
+                tid = target;
+            }
+        }
+        int mp = isBox ? SharedBackpackMod.database.getBoxMaxPages(storageOwner, tid) : SharedBackpackMod.database.getMaxPages(tid);
         int cp = Math.max(0, Math.min(page, mp-1));
         String dn = tid; if (isBox && tid.contains(":")) dn = tid.substring(tid.lastIndexOf(':')+1);
         String title = unload ? "\u5378\u8d27" : (isBox ? "\u76d2\u5b50: "+dn : "\u5171\u4eab\u80cc\u5305 - "+tid);
         if (search != null && !search.isEmpty()) title += " \u641c\u7d22:"+search;
-        String ft = title; int fp = cp; boolean fw = unload; boolean fb = isBox; String fo = boxOwner;
-        player.openMenu(new MenuProvider() {
-            public AbstractContainerMenu createMenu(int id, Inventory inv, Player p) {
-                return new BackpackMenu(id, player, tid, fp, mp, search, fw, fb, fo);
+        final String ft = title;
+        final String menuId = tid;
+        final int fp = cp;
+        final int menuPages = mp;
+        final boolean fw = unload;
+        final boolean fb = isBox;
+        final String fo = storageOwner;
+        player.openHandledScreen(new NamedScreenHandlerFactory() {
+            public ScreenHandler createMenu(int id, PlayerInventory inv, PlayerEntity p) {
+                return new BackpackMenu(id, player, menuId, fp, menuPages, search, fw, fb, fo);
             }
-            public Component getDisplayName() { return Component.literal(ft); }
+            public LiteralText getDisplayName() { return new LiteralText(ft); }
         });
     }
 
     // ===== Menu System =====
 
     interface MenuPage {
-        void populate(ItemStackHandler handler, int maxSlots);
+        void populate(SimpleInventory handler, int maxSlots);
         String onClick(int slotId, BackpackMenu menu);
     }
 
     class ModMenuPage implements MenuPage {
         final Map<Integer, String> map = new HashMap<>();
-        public void populate(ItemStackHandler h, int max) {
+        public void populate(SimpleInventory h, int max) {
             map.clear();
-            var all = dbItems();
-            var uniq = new LinkedHashMap<String, DatabaseManager.BackpackItem>();
-            for (var it : all) { String ns = it.itemId.contains(":")?it.itemId.split(":",2)[0]:"minecraft"; uniq.putIfAbsent(ns, it); }
+            List<DatabaseManager.BackpackItem> all = dbItems();
+            Map<String, DatabaseManager.BackpackItem> uniq = new LinkedHashMap<String, DatabaseManager.BackpackItem>();
+            for (DatabaseManager.BackpackItem it : all) { String ns = it.itemId.contains(":")?it.itemId.split(":",2)[0]:"minecraft"; uniq.putIfAbsent(ns, it); }
             int i = 0;
-            for (var e : uniq.entrySet()) {
+            for (Map.Entry<String, DatabaseManager.BackpackItem> e : uniq.entrySet()) {
                 if (i >= max) break;
                 ItemStack icon = SharedBackpack.toItemStack(e.getValue());
                 long cnt = all.stream().filter(it -> (it.itemId.contains(":")?it.itemId.split(":",2)[0]:"minecraft").equals(e.getKey())).mapToInt(it -> it.count).sum();
-                icon.setHoverName(Component.literal("\u00a76"+e.getKey()+" \u00a77("+cnt+" \u4ef6)"));
-                map.put(i, e.getKey()); h.setStackInSlot(i++, icon);
+                icon.setCustomName(new LiteralText("\u00a76"+e.getKey()+" \u00a77("+cnt+" \u4ef6)"));
+                map.put(i, e.getKey()); h.setStack(i++, icon);
             }
         }
         public String onClick(int slotId, BackpackMenu m) {
@@ -608,20 +645,20 @@ public class BackpackMenu extends AbstractContainerMenu {
 
     class BoxMenuPage implements MenuPage {
         final Map<Integer, String> map = new HashMap<>();
-        public void populate(ItemStackHandler h, int max) {
+        public void populate(SimpleInventory h, int max) {
             map.clear();
-            var list = SharedBackpackMod.database.listBoxes(TeamResolver.resolvePrimaryTeam(player));
+            List<String> list = SharedBackpackMod.database.listBoxes(TeamResolver.resolvePrimaryTeam(player));
             int i = 0;
             for (String name : list) {
                 if (i >= max-1) break;
                 ItemStack icon = new ItemStack(Items.CHEST);
-                icon.setHoverName(Component.literal("\u00a76"+name));
-                map.put(i, name); h.setStackInSlot(i++, icon);
+                icon.setCustomName(new LiteralText("\u00a76"+name));
+                map.put(i, name); h.setStack(i++, icon);
             }
             if (i < max) {
                 ItemStack nb = new ItemStack(Items.CRAFTING_TABLE);
-                nb.setHoverName(Component.literal("\u00a7a+ \u65b0\u5efa\u76d2\u5b50"));
-                map.put(i, "__new__"); h.setStackInSlot(i, nb);
+                nb.setCustomName(new LiteralText("\u00a7a+ \u65b0\u5efa\u76d2\u5b50"));
+                map.put(i, "__new__"); h.setStack(i, nb);
             }
         }
         public String onClick(int slotId, BackpackMenu m) {
@@ -629,7 +666,7 @@ public class BackpackMenu extends AbstractContainerMenu {
             if ("__new__".equals(name)) { m.doCreateBox(); return "CREATE"; }
             String team = TeamResolver.resolvePrimaryTeam(player);
             m.stashCarried();
-            player.getServer().execute(() -> openForPlayer(player, searchFilter, 0, false, true, team+":"+name));
+            player.server.execute(() -> openForPlayer(player, searchFilter, 0, false, true, team+":"+name));
             return "OPEN";
         }
     }
@@ -638,39 +675,22 @@ public class BackpackMenu extends AbstractContainerMenu {
 
     class BpSlot extends Slot {
         final int ls;
-        BpSlot(int ls, int x, int y) { super(new BpContainer(ls), 0, x, y); this.ls = ls; }
-        public boolean mayPickup(Player p) { return !isControlSlot(ls); }
-        public boolean mayPlace(ItemStack s) { return !isControlSlot(ls) && !isMenuView(); }
-        public void onTake(Player t, ItemStack s) {
-            if (!isControlSlot(ls)) { stripDisplay(s); s.resetHoverName(); dbRemove(realDbSlot(ls), s.getCount()); }
+        BpSlot(int ls, int x, int y) { super(handler, ls, x, y); this.ls = ls; }
+        public boolean canTakeItems(PlayerEntity p) { return !isControlSlot(ls); }
+        public boolean canInsert(ItemStack s) { return !isControlSlot(ls) && !isMenuView(); }
+        public ItemStack onTakeItem(PlayerEntity t, ItemStack s) {
+            if (!isControlSlot(ls)) { stripDisplay(s); s.removeCustomName(); dbRemove(realDbSlot(ls), s.getCount()); }
+            return super.onTakeItem(t, s);
         }
-        public void set(ItemStack s) {
+        public void setStack(ItemStack s) {
             if (!isControlSlot(ls)) {
                 if (!s.isEmpty()) {
-                    String iid = BuiltInRegistries.ITEM.getKey(s.getItem()).toString();
+                    String iid = Registry.ITEM.getId(s.getItem()).toString();
                     String n = nbtForStorage(s);
-                    dbSet(realDbSlot(ls), iid, s.getCount(), n, player.getScoreboardName());
+                    dbSet(realDbSlot(ls), iid, s.getCount(), n, player.getEntityName());
                 } else { dbRemove(realDbSlot(ls), 99999); }
             }
-            handler.setStackInSlot(ls, s);
+            super.setStack(s);
         }
-    }
-
-    class BpContainer implements Container {
-        final int ls; BpContainer(int ls) { this.ls = ls; }
-        public int getContainerSize() { return 1; }
-        public boolean isEmpty() { return handler.getStackInSlot(ls).isEmpty(); }
-        public ItemStack getItem(int i) { return handler.getStackInSlot(ls); }
-        public ItemStack removeItem(int i, int c) {
-            ItemStack s = handler.getStackInSlot(ls); if (s.isEmpty()) return ItemStack.EMPTY;
-            ItemStack t = s.split(c); handler.setStackInSlot(ls, s); return t;
-        }
-        public void setItem(int i, ItemStack s) { handler.setStackInSlot(ls, s); }
-        // setChanged is intentionally a no-op: all DB writes are handled explicitly
-        // by BpSlot.set() and BpSlot.onTake() to prevent double-writes.
-        public void setChanged() {}
-        public boolean stillValid(Player p) { return true; }
-        public ItemStack removeItemNoUpdate(int i) { return handler.getStackInSlot(ls); }
-        public void clearContent() { handler.setStackInSlot(ls, ItemStack.EMPTY); }
     }
 }

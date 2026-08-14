@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "sharedbackpack",
+  "version": "${version}",
+  "name": "Shared Backpack",
+  "description": "Team-shared backpack with SQLite storage.",
+  "authors": ["SharedBackpack Dev"],
+  "contact": {
+    "sources": "https://github.com/rabbit-dayi/sharedbackpack"
+  },
+  "license": "MIT",
+  "environment": "server",
+  "entrypoints": {
+    "main": ["com.sharedbackpack.SharedBackpackMod"]
+  },
+  "depends": {
+    "fabricloader": ">=0.14.25",
+    "fabric-api": "*",
+    "minecraft": "1.16.5",
+    "java": ">=8"
+  }
+}

@@ -1,8 +1,8 @@
 package com.sharedbackpack.backpack;
 
-import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.scores.PlayerTeam;
-import net.minecraft.world.scores.Scoreboard;
+import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.scoreboard.Team;
+import net.minecraft.scoreboard.Scoreboard;
 
 import java.util.*;
 
@@ -15,17 +15,17 @@ public class TeamResolver {
      * If player is on teams, returns all team names (union).
      * Otherwise returns the global team.
      */
-    public static List<String> resolveTeams(ServerPlayer player) {
+    public static List<String> resolveTeams(ServerPlayerEntity player) {
         Scoreboard scoreboard = player.getScoreboard();
-        PlayerTeam team = scoreboard.getPlayersTeam(player.getScoreboardName());
+        Team team = scoreboard.getPlayerTeam(player.getEntityName());
         if (team != null) {
-            return List.of(team.getName());
+            return Collections.singletonList(team.getName());
         }
 
         // Check if player is in multiple teams via scoreboard
         List<String> teams = new ArrayList<>();
-        for (PlayerTeam t : scoreboard.getPlayerTeams()) {
-            if (t.getPlayers().contains(player.getScoreboardName())) {
+        for (Team t : scoreboard.getTeams()) {
+            if (t.getPlayerList().contains(player.getEntityName())) {
                 teams.add(t.getName());
             }
         }
@@ -33,14 +33,14 @@ public class TeamResolver {
             return teams;
         }
 
-        return List.of(GLOBAL_TEAM);
+        return Collections.singletonList(GLOBAL_TEAM);
     }
 
     /**
      * Get the primary team for adding items.
      * Always returns the first resolved team.
      */
-    public static String resolvePrimaryTeam(ServerPlayer player) {
+    public static String resolvePrimaryTeam(ServerPlayerEntity player) {
         List<String> teams = resolveTeams(player);
         return teams.get(0);
     }

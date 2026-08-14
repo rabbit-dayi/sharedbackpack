@@ -1,14 +1,14 @@
 # Shared Backpack / 共享背包
 
-[![Forge](https://img.shields.io/badge/Forge-1.20.1--47.4.10-orange)](https://files.minecraftforge.net/)
-[![Java](https://img.shields.io/badge/Java-17%2B-blue)](https://www.oracle.com/java/)
+[![Fabric](https://img.shields.io/badge/Fabric-1.16.5-blue)](https://fabricmc.net/)
+[![Java](https://img.shields.io/badge/Java-8%2B-blue)](https://adoptium.net/)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
 ![Screenshot](docs/screenshot.png)
 
-A server-only Minecraft Forge mod providing a team-shared backpack with SQLite storage, fuzzy Chinese pinyin search, and player-customizable boxes.
+A server-only Minecraft Fabric mod for 1.16.5, providing a team-shared backpack with SQLite storage, fuzzy Chinese pinyin search, and player-customizable boxes.
 
-服务端 only 的 Minecraft Forge 模组，提供基于 SQLite 的团队共享背包，支持模糊拼音搜索和玩家自定义盒子。
+服务端 only 的 Minecraft Fabric 1.16.5 模组，提供基于 SQLite 的团队共享背包，支持模糊拼音搜索和玩家自定义盒子。
 
 ---
 
@@ -63,20 +63,23 @@ Bottom row (slots 45-53) is the control bar:
 ## Build / 构建
 
 ```bash
-cd cc_mod
+cd sharedbackpack
 ./gradlew build
-# Output: build/libs/sharedbackpack-1.0.0.jar
+# Output: build/libs/sharedbackpack-1.16.5-1.5.7.jar
 ```
 
 ### Dependencies / 依赖
 
-- [Minecraft Forge 1.20.1-47.4.10](https://files.minecraftforge.net/)
+- [Minecraft Fabric Loader 0.14.25+](https://fabricmc.net/use/)
+- [Fabric API 0.42.0+1.16](https://modrinth.com/mod/fabric-api/version/0.42.0+1.16)
+- Minecraft 1.16.5
+- Java 8+
 - [SQLite JDBC 3.45.1.0](https://github.com/xerial/sqlite-jdbc)
 - [PinIn 1.6.0](https://github.com/Towdium/PinIn) — Chinese pinyin matching
 
 ### Deploy / 部署
 
-Copy `sharedbackpack-1.0.0.jar` to server's `mods/` folder. Stop the server before deploying.
+Install Fabric Loader and Fabric API on the Minecraft 1.16.5 server, then copy `sharedbackpack-1.16.5-1.5.7.jar` to the server's `mods/` folder. Stop the server before deploying.
 
 ## License / 许可证
 

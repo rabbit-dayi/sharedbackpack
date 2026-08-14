@@ -1,10 +1,10 @@
 package com.sharedbackpack.commands;
 
 import com.sharedbackpack.database.DatabaseManager;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.Item;
+import net.minecraft.util.registry.Registry;
+import net.minecraft.text.LiteralText;
+import net.minecraft.util.Identifier;
+import net.minecraft.item.Item;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -20,7 +20,7 @@ public class PinyinSearch {
      */
     public static List<DatabaseManager.BackpackItem> search(
             List<DatabaseManager.BackpackItem> items, String query) {
-        if (query == null || query.isBlank()) return items;
+        if (query == null || query.trim().isEmpty()) return items;
 
         String q = query.toLowerCase().trim();
         String[] words = q.split("\\s+");
@@ -49,11 +49,11 @@ public class PinyinSearch {
             // Match term against path, name, pinyin
             String path = item.itemId.contains(":") ? item.itemId.split(":", 2)[1].toLowerCase() : item.itemId.toLowerCase();
             if (path.contains(term)) return true;
-            Item mcItem = BuiltInRegistries.ITEM.get(ResourceLocation.parse(item.itemId));
+            Item mcItem = Registry.ITEM.get(new Identifier(item.itemId));
             if (mcItem != null) {
-                String cnName = ChineseNames.get(mcItem.getDescriptionId());
+                String cnName = ChineseNames.get(mcItem.getTranslationKey());
                 if (cnName != null && PinyinUtil.matches(cnName, term)) return true;
-                String name = mcItem.getDescription().getString().toLowerCase();
+                String name = mcItem.getName().getString().toLowerCase();
                 if (name.contains(term)) return true;
                 if (PinyinUtil.matches(name, term)) return true;
             }
@@ -70,11 +70,11 @@ public class PinyinSearch {
         String itemNs = item.itemId.contains(":") ? item.itemId.split(":", 2)[0].toLowerCase() : "minecraft";
         if (itemNs.contains(query)) return true;
 
-        Item mcItem = BuiltInRegistries.ITEM.get(ResourceLocation.parse(item.itemId));
+        Item mcItem = Registry.ITEM.get(new Identifier(item.itemId));
         if (mcItem != null) {
-            String cnName = ChineseNames.get(mcItem.getDescriptionId());
+            String cnName = ChineseNames.get(mcItem.getTranslationKey());
             if (cnName != null && PinyinUtil.matches(cnName, query)) return true;
-            String name = mcItem.getDescription().getString().toLowerCase();
+            String name = mcItem.getName().getString().toLowerCase();
             if (name.contains(query)) return true;
             if (PinyinUtil.matches(name, query)) return true;
         }
@@ -86,18 +86,18 @@ public class PinyinSearch {
      * Search all registered items (for /c search command to find items to add).
      */
     public static List<ItemSearchResult> searchAllItems(String query) {
-        if (query == null || query.isBlank()) return List.of();
+        if (query == null || query.trim().isEmpty()) return Collections.emptyList();
 
         String q = query.toLowerCase().trim();
         List<ItemSearchResult> results = new ArrayList<>();
 
-        for (Item item : BuiltInRegistries.ITEM) {
-            ResourceLocation id = BuiltInRegistries.ITEM.getKey(item);
+        for (Item item : Registry.ITEM) {
+            Identifier id = Registry.ITEM.getId(item);
             if (id == null) continue;
 
             String itemId = id.toString().toLowerCase();
-            String name = item.getDescription().getString().toLowerCase();
-            String cnName = ChineseNames.get(item.getDescriptionId());
+            String name = item.getName().getString().toLowerCase();
+            String cnName = ChineseNames.get(item.getTranslationKey());
 
             boolean matched = itemId.contains(q) || name.contains(q)
                 || PinyinUtil.matches(name, q);
@@ -115,5 +115,21 @@ public class PinyinSearch {
         return results;
     }
 
-    public record ItemSearchResult(String itemId, String displayName) {}
+    public static final class ItemSearchResult {
+        private final String itemId;
+        private final String displayName;
+
+        public ItemSearchResult(String itemId, String displayName) {
+            this.itemId = itemId;
+            this.displayName = displayName;
+        }
+
+        public String itemId() {
+            return itemId;
+        }
+
+        public String displayName() {
+            return displayName;
+        }
+    }
 }
