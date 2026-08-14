@@ -27,6 +27,10 @@ dependencies {
     include('org.xerial:sqlite-jdbc:3.45.1.0') {
         exclude group: 'org.slf4j', module: 'slf4j-api'
     }
+    implementation 'org.slf4j:slf4j-api:1.7.36'
+    include 'org.slf4j:slf4j-api:1.7.36'
+    implementation 'org.slf4j:slf4j-nop:1.7.36'
+    include 'org.slf4j:slf4j-nop:1.7.36'
     implementation('com.github.Towdium:PinIn:1.6.0') {
         exclude group: 'it.unimi.dsi'
     }

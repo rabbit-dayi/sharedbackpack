@@ -29,6 +29,7 @@ public class DatabaseManager {
     public void init() {
         try {
             backupBeforeInit();
+            Class.forName("org.sqlite.JDBC");
             connection = DriverManager.getConnection("jdbc:sqlite:" + dbFile.getAbsolutePath());
             connection.setAutoCommit(true);
             createTables();
