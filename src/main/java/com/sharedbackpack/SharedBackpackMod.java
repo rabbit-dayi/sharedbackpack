@@ -5,10 +5,10 @@ import com.sharedbackpack.commands.CCCommand;
 import com.sharedbackpack.commands.CCommand;
 import com.sharedbackpack.commands.ChineseNames;
 import com.sharedbackpack.commands.DebugCommand;
+import com.sharedbackpack.compat.CommandRegistrar;
 import com.sharedbackpack.database.DatabaseManager;
 import com.sharedbackpack.gui.BackpackMenuHandler;
 import net.fabricmc.api.ModInitializer;
-import net.fabricmc.fabric.api.command.v1.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -36,11 +36,7 @@ public class SharedBackpackMod implements ModInitializer {
                 database.close();
             }
         });
-        CommandRegistrationCallback.EVENT.register((dispatcher, dedicated) -> {
-            CCommand.register(dispatcher);
-            CCCommand.register(dispatcher);
-            DebugCommand.register(dispatcher);
-        });
+        CommandRegistrar.register();
         BackpackMenuHandler.register();
         LOGGER.info("Shared Backpack Fabric mod loaded (server-only)");
     }

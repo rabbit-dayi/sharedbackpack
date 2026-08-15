@@ -3,11 +3,40 @@ plugins {
     id 'maven-publish'
 }
 
-version = '1.16.5-1.5.7'
+def supportedTargets = [
+    '1.16.5': [
+        yarn: '1.16.5+build.10',
+        loader: '0.14.25',
+        loaderDependency: '>=0.14.25',
+        fabricApi: '0.42.0+1.16',
+        java: 8,
+        javaDependency: '>=8',
+        packFormat: 6,
+        compat: 'legacy'
+    ],
+    '1.20.1': [
+        yarn: '1.20.1+build.10',
+        loader: '0.16.10',
+        loaderDependency: '>=0.16.10',
+        fabricApi: '0.92.11+1.20.1',
+        java: 17,
+        javaDependency: '>=17',
+        packFormat: 15,
+        compat: 'modern'
+    ]
+]
+
+def minecraftVersion = providers.gradleProperty('mcVersion').getOrElse('1.16.5')
+def target = supportedTargets[minecraftVersion]
+if (target == null) {
+    throw new GradleException("Unsupported Minecraft version '${minecraftVersion}'. Supported versions: ${supportedTargets.keySet().join(', ')}")
+}
+
+version = '1.5.8'
 group = 'com.sharedbackpack'
 
 base {
-    archivesName = 'sharedbackpack'
+    archivesName = "sharedbackpack-fabric-${minecraftVersion}"
 }
 
 repositories {
@@ -16,10 +45,10 @@ repositories {
 }
 
 dependencies {
-    minecraft 'com.mojang:minecraft:1.16.5'
-    mappings 'net.fabricmc:yarn:1.16.5+build.10:v2'
-    modImplementation 'net.fabricmc:fabric-loader:0.14.25'
-    modImplementation 'net.fabricmc.fabric-api:fabric-api:0.42.0+1.16'
+    minecraft "com.mojang:minecraft:${minecraftVersion}"
+    mappings "net.fabricmc:yarn:${target.yarn}:v2"
+    modImplementation "net.fabricmc:fabric-loader:${target.loader}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${target.fabricApi}"
 
     implementation('org.xerial:sqlite-jdbc:3.45.1.0') {
         exclude group: 'org.slf4j', module: 'slf4j-api'
@@ -40,18 +69,26 @@ dependencies {
 }
 
 processResources {
-    inputs.property 'version', project.version
-    filesMatching('fabric.mod.json') {
-        expand version: project.version
+    inputs.properties version: project.version, minecraftVersion: minecraftVersion,
+            loaderVersion: target.loaderDependency, javaVersion: target.javaDependency, packFormat: target.packFormat
+    filesMatching(['fabric.mod.json', 'pack.mcmeta']) {
+        expand version: project.version, minecraft_version: minecraftVersion, loader_version: target.loaderDependency,
+                java_version: target.javaDependency, pack_format: target.packFormat
+    }
+}
+
+sourceSets {
+    main {
+        java.srcDir "src/compat/${target.compat}/java"
     }
 }
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
-    options.release = 8
+    options.release = target.java
 }
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_1_8
-    targetCompatibility = JavaVersion.VERSION_1_8
+    sourceCompatibility = JavaVersion.toVersion(target.java)
+    targetCompatibility = JavaVersion.toVersion(target.java)
 }

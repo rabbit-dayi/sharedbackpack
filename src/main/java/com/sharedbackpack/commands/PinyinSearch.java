@@ -1,8 +1,7 @@
 package com.sharedbackpack.commands;
 
+import com.sharedbackpack.compat.MinecraftCompat;
 import com.sharedbackpack.database.DatabaseManager;
-import net.minecraft.util.registry.Registry;
-import net.minecraft.text.LiteralText;
 import net.minecraft.util.Identifier;
 import net.minecraft.item.Item;
 
@@ -49,7 +48,7 @@ public class PinyinSearch {
             // Match term against path, name, pinyin
             String path = item.itemId.contains(":") ? item.itemId.split(":", 2)[1].toLowerCase() : item.itemId.toLowerCase();
             if (path.contains(term)) return true;
-            Item mcItem = Registry.ITEM.get(new Identifier(item.itemId));
+            Item mcItem = MinecraftCompat.getItem(new Identifier(item.itemId));
             if (mcItem != null) {
                 String cnName = ChineseNames.get(mcItem.getTranslationKey());
                 if (cnName != null && PinyinUtil.matches(cnName, term)) return true;
@@ -70,7 +69,7 @@ public class PinyinSearch {
         String itemNs = item.itemId.contains(":") ? item.itemId.split(":", 2)[0].toLowerCase() : "minecraft";
         if (itemNs.contains(query)) return true;
 
-        Item mcItem = Registry.ITEM.get(new Identifier(item.itemId));
+        Item mcItem = MinecraftCompat.getItem(new Identifier(item.itemId));
         if (mcItem != null) {
             String cnName = ChineseNames.get(mcItem.getTranslationKey());
             if (cnName != null && PinyinUtil.matches(cnName, query)) return true;
@@ -91,8 +90,8 @@ public class PinyinSearch {
         String q = query.toLowerCase().trim();
         List<ItemSearchResult> results = new ArrayList<>();
 
-        for (Item item : Registry.ITEM) {
-            Identifier id = Registry.ITEM.getId(item);
+        for (Item item : MinecraftCompat.items()) {
+            Identifier id = MinecraftCompat.getItemId(item);
             if (id == null) continue;
 
             String itemId = id.toString().toLowerCase();

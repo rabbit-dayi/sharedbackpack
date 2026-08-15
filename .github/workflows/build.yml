@@ -11,9 +11,14 @@ permissions:
 
 jobs:
   build:
-    name: Fabric 1.16.5 Build
+    name: Fabric ${{ matrix.minecraft }} Build
     runs-on: ubuntu-latest
     timeout-minutes: 20
+
+    strategy:
+      fail-fast: false
+      matrix:
+        minecraft: ["1.16.5", "1.20.1"]
 
     steps:
       - name: Check out source
@@ -29,12 +34,12 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Build mod
-        run: ./gradlew clean build --no-daemon --stacktrace
+        run: ./gradlew clean build -PmcVersion=${{ matrix.minecraft }} --no-daemon --stacktrace
 
       - name: Upload mod artifact
         uses: actions/upload-artifact@v7
         with:
-          name: sharedbackpack-fabric-1.16.5
-          path: build/libs/sharedbackpack-*.jar
+          name: sharedbackpack-fabric-${{ matrix.minecraft }}
+          path: build/libs/sharedbackpack-fabric-${{ matrix.minecraft }}-*.jar
           if-no-files-found: error
           retention-days: 14
