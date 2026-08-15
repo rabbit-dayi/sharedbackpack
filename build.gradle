@@ -32,7 +32,7 @@ if (target == null) {
     throw new GradleException("Unsupported Minecraft version '${minecraftVersion}'. Supported versions: ${supportedTargets.keySet().join(', ')}")
 }
 
-version = '1.5.8'
+version = '1.5.9'
 group = 'com.sharedbackpack'
 
 base {

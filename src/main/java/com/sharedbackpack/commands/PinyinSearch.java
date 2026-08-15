@@ -52,7 +52,7 @@ public class PinyinSearch {
             if (mcItem != null) {
                 String cnName = ChineseNames.get(mcItem.getTranslationKey());
                 if (cnName != null && PinyinUtil.matches(cnName, term)) return true;
-                String name = mcItem.getName().getString().toLowerCase();
+                String name = MinecraftCompat.getItemDisplayName(mcItem).toLowerCase();
                 if (name.contains(term)) return true;
                 if (PinyinUtil.matches(name, term)) return true;
             }
@@ -73,7 +73,7 @@ public class PinyinSearch {
         if (mcItem != null) {
             String cnName = ChineseNames.get(mcItem.getTranslationKey());
             if (cnName != null && PinyinUtil.matches(cnName, query)) return true;
-            String name = mcItem.getName().getString().toLowerCase();
+            String name = MinecraftCompat.getItemDisplayName(mcItem).toLowerCase();
             if (name.contains(query)) return true;
             if (PinyinUtil.matches(name, query)) return true;
         }
