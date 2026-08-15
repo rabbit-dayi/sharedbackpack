@@ -19,10 +19,10 @@ A server-only Minecraft Fabric mod for 1.16.5 and 1.20.1, providing a team-share
 - **Fuzzy search** — `/c <text>` with PinIn-powered Chinese pinyin matching, English name, item ID, and namespace search (e.g. `tfc:ore`, `forge:stone`)
 - **Mod classification** — Secondary menu groups items by mod namespace with representative icons
 - **Unload mode** — `/cc unload` opens a blank 5-row grid for quick dumping
-- **Item metadata** — HoverName shows `[Player HH:mm xN]`; stripped on item pickup
-- **SQLite storage** — Auto-backup, transaction-safe, strict NBT comparison for stacking
+- **NBT preservation** — Original item NBT is stored and restored without adding, stripping, or rewriting display tags
+- **SQLite storage** — Auto-backup, transaction-safe, full-NBT comparison for stacking
 - **Page navigation** — Diamond-based capacity upgrade; prev/next page buttons
-- **Sort** — Consolidate identical items into stacks, keeping metadata
+- **Sort** — Consolidate only items with identical IDs and complete NBT; CTM/custom variants remain separate
 
 ### Commands / 命令
 
@@ -65,10 +65,10 @@ Bottom row (slots 45-53) is the control bar:
 ```bash
 cd sharedbackpack
 ./gradlew build -PmcVersion=1.16.5
-# Output: build/libs/sharedbackpack-fabric-1.16.5-1.5.9.jar
+# Output: build/libs/sharedbackpack-fabric-1.16.5-1.5.10.jar
 
 ./gradlew build -PmcVersion=1.20.1
-# Output: build/libs/sharedbackpack-fabric-1.20.1-1.5.9.jar
+# Output: build/libs/sharedbackpack-fabric-1.20.1-1.5.10.jar
 ```
 
 ### Dependencies / 依赖

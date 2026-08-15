@@ -54,28 +54,8 @@ public class SharedBackpack {
         if (stack.isEmpty()) return false;
         String teamId = TeamResolver.resolvePrimaryTeam(player);
         String itemId = MinecraftCompat.getItemId(stack.getItem()).toString();
-        String nbt = MinecraftCompat.hasNbt(stack) ? stripMetadata(MinecraftCompat.getNbt(stack).toString()) : null;
+        String nbt = MinecraftCompat.hasNbt(stack) ? MinecraftCompat.getNbt(stack).copy().toString() : null;
         return SharedBackpackMod.database.addItem(teamId, itemId, stack.getCount(), nbt, player.getEntityName());
-    }
-
-    public static String stripMetadata(String nbtStr) {
-        if (nbtStr == null || nbtStr.isEmpty()) return null;
-        try {
-            NbtCompound tag = net.minecraft.nbt.StringNbtReader.parse(nbtStr);
-            tag.remove("placedBy");
-            tag.remove("placedTime");
-            tag.remove("placedCount");
-            tag.remove("lastModifiedBy");
-            tag.remove("lastModifiedTime");
-            if (tag.contains("display")) {
-                NbtCompound display = tag.getCompound("display");
-                display.remove("Lore");
-                if (display.isEmpty()) tag.remove("display");
-            }
-            return tag.isEmpty() ? null : tag.toString();
-        } catch (Exception e) {
-            return nbtStr;
-        }
     }
 
     public static boolean removeItem(ServerPlayerEntity player, String teamId, int slot, int count) {
