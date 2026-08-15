@@ -87,6 +87,7 @@ public class CCCommand {
                         .executes(ctx -> bindToBox(ctx.getSource(), StringArgumentType.getString(ctx, "name"))))))
             .then(CommandManager.literal("unbind")
                 .executes(ctx -> unbindItem(ctx.getSource())))
+            .then(DebugCommand.createCommand("debug"))
         );
     }
 
@@ -106,6 +107,8 @@ public class CCCommand {
         src.sendFeedback(new LiteralText("§e/cc box open <name> §7- 打开个人盒子"), false);
         src.sendFeedback(new LiteralText("§e/cc box list §7- 列出个人盒子"), false);
         src.sendFeedback(new LiteralText("§e/cc box delete <name> §7- 删除个人盒子"), false);
+        src.sendFeedback(new LiteralText("§e/cc bind §7- 将手持物品绑定为背包钥匙"), false);
+        src.sendFeedback(new LiteralText("§e/cc unbind §7- 解绑背包钥匙"), false);
         return 1;
     }
 
@@ -292,7 +295,7 @@ public class CCCommand {
             src.sendError(new LiteralText("此命令只能由玩家使用")); return 0;
         }
         BindManager.unbind(player.getUuidAsString());
-        src.sendFeedback(new LiteralText("§a已解绑，恢复默认胡萝卜"), false);
+        src.sendFeedback(new LiteralText("§a已解绑。请使用 /cc bind 绑定手持物品作为背包钥匙"), false);
         return 1;
     }
 
