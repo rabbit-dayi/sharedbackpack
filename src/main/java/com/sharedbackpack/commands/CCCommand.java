@@ -197,7 +197,7 @@ public class CCCommand {
         if (item == null || item == Items.AIR) {
             MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§c物品 " + id + " 未找到"));
         } else {
-            String name = item.getName().getString();
+            String name = MinecraftCompat.getItemDisplayName(item);
             MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§6" + id + " = " + name + " | py:" + PinyinUtil.toPinyin(name)));
         }
         return 1;
