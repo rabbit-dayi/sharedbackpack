@@ -27,6 +27,10 @@ public final class MinecraftCompat {
         return Registries.ITEM.getId(item);
     }
 
+    public static String getItemDisplayName(Item item) {
+        return item.getName().getString();
+    }
+
     public static Iterable<Item> items() {
         return Registries.ITEM;
     }

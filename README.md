@@ -65,10 +65,10 @@ Bottom row (slots 45-53) is the control bar:
 ```bash
 cd sharedbackpack
 ./gradlew build -PmcVersion=1.16.5
-# Output: build/libs/sharedbackpack-fabric-1.16.5-1.5.8.jar
+# Output: build/libs/sharedbackpack-fabric-1.16.5-1.5.9.jar
 
 ./gradlew build -PmcVersion=1.20.1
-# Output: build/libs/sharedbackpack-fabric-1.20.1-1.5.8.jar
+# Output: build/libs/sharedbackpack-fabric-1.20.1-1.5.9.jar
 ```
 
 ### Dependencies / 依赖
