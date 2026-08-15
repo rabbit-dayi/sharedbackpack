@@ -6,7 +6,6 @@ import net.minecraft.util.registry.Registry;
 import net.minecraft.util.Identifier;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -53,7 +52,7 @@ public class BindManager {
 
     public static boolean matches(String playerId, ItemStack stack) {
         String bound = BINDS.get(playerId);
-        if (bound == null) return stack.getItem() == Items.CARROT;
+        if (bound == null) return false;
         Item item = Registry.ITEM.get(new Identifier(bound));
         return item != null && stack.getItem() == item;
     }

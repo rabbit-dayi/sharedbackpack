@@ -8,6 +8,8 @@ import com.sharedbackpack.SharedBackpackMod;
 import com.sharedbackpack.database.DatabaseManager;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.command.CommandManager;
+import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.entity.Entity;
 import net.minecraft.util.registry.Registry;
 import net.minecraft.text.LiteralText;
 import net.minecraft.util.Identifier;
@@ -22,7 +24,11 @@ import java.util.HashSet;
 public class DebugCommand {
 
     public static void register(CommandDispatcher<ServerCommandSource> dispatcher) {
-        LiteralArgumentBuilder<ServerCommandSource> debug = CommandManager.literal("ccdebug")
+        dispatcher.register(createCommand("ccdebug"));
+    }
+
+    public static LiteralArgumentBuilder<ServerCommandSource> createCommand(String root) {
+        return CommandManager.literal(root)
             .requires(src -> src.hasPermissionLevel(2))
             // 1. Check DB connection
             .then(CommandManager.literal("dbcheck")
@@ -170,16 +176,14 @@ public class DebugCommand {
                 .then(CommandManager.argument("team", StringArgumentType.string())
                     .executes(ctx -> clearAll(ctx.getSource(), StringArgumentType.getString(ctx, "team")))))
         ;
-
-        dispatcher.register(debug);
     }
 
     // ===== 1. dbcheck =====
     private static int dbCheck(ServerCommandSource src) {
         boolean ok = SharedBackpackMod.database != null && SharedBackpackMod.database.isReady();
         final String msg = ok ? "§aDB connection: OK" : "§cDB connection: FAILED";
-        src.sendFeedback(new LiteralText(msg), false);
-        return 1;
+        sendDebugFeedback(src, msg);
+        return dbInfo(src);
     }
 
     // ===== 2. dbinfo =====
@@ -188,21 +192,30 @@ public class DebugCommand {
         final String path = dbFile.getAbsolutePath();
         final String exists = dbFile.exists() ? "true" : "false";
         final String size = dbFile.exists() ? (dbFile.length() / 1024) + " KB" : "N/A";
-        src.sendFeedback(new LiteralText("§6DB path: " + path), false);
-        src.sendFeedback(new LiteralText("§6Exists: " + exists + " | Size: " + size), false);
+        sendDebugFeedback(src, "§6DB path: " + path);
+        sendDebugFeedback(src, "§6Exists: " + exists + " | Size: " + size);
         final File wal = new File(dbFile.getParent(), "backpack.db-wal");
         final File shm = new File(dbFile.getParent(), "backpack.db-shm");
         final String walInfo = wal.exists() ? (wal.length() + " bytes") : "N/A";
         final String shmInfo = shm.exists() ? (shm.length() + " bytes") : "N/A";
-        src.sendFeedback(new LiteralText("§6WAL: " + wal.exists() + " (" + walInfo + ")"), false);
-        src.sendFeedback(new LiteralText("§6SHM: " + shm.exists() + " (" + shmInfo + ")"), false);
+        sendDebugFeedback(src, "§6WAL: " + wal.exists() + " (" + walInfo + ")");
+        sendDebugFeedback(src, "§6SHM: " + shm.exists() + " (" + shmInfo + ")");
         final File backupDir = new File(dbFile.getParent(), "backups");
         if (backupDir.exists()) {
             final File[] bu = backupDir.listFiles((d, n) -> n.endsWith(".db"));
             final int buCount = bu != null ? bu.length : 0;
-            src.sendFeedback(new LiteralText("§6Backups: " + buCount + " files"), false);
+            sendDebugFeedback(src, "§6Backups: " + buCount + " files");
         }
         return 1;
+    }
+
+    private static void sendDebugFeedback(ServerCommandSource src, String message) {
+        Entity entity = src.getEntity();
+        if (entity instanceof ServerPlayerEntity) {
+            ((ServerPlayerEntity) entity).sendMessage(new LiteralText(message), false);
+        } else {
+            src.sendFeedback(new LiteralText(message), false);
+        }
     }
 
     // ===== 3. tablecounts =====
