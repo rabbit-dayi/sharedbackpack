@@ -52,8 +52,6 @@ abstract class BackpackMenuBase extends ScreenHandler {
     private int displaySort = 0; // 0=default 1=count_desc 2=count_asc 3=time_desc 4=time_asc
     private boolean loading;
     private final Map<Integer, Integer> slotMap = new HashMap<>();
-    // slotTotalCount: gui slot index -> total stacked count (for stacked display)
-    private final Map<Integer, Integer> slotTotalCount = new HashMap<>();
 
     protected BackpackMenuBase(int id, ServerPlayerEntity player, String teamId, int page, int maxPages,
                                String searchFilter, boolean unloadMode, boolean isBox, String boxOwner) {
@@ -125,56 +123,10 @@ abstract class BackpackMenuBase extends ScreenHandler {
     private int invStart() { return unloadMode ? INV_START_UNLOAD : INV_START_NORMAL; }
     private int invEnd()   { return unloadMode ? INV_END_UNLOAD : INV_END_NORMAL; }
 
-    static void stripDisplay(ItemStack stack) {
-        NbtCompound t = MinecraftCompat.getNbt(stack); if (t == null) return;
-        boolean d = false;
-        if (t.contains("display")) { NbtCompound dp = t.getCompound("display");
-            if (dp.contains("Lore")) { dp.remove("Lore"); d = true; }
-            if (dp.contains("Name")) { dp.remove("Name"); d = true; }
-            if (dp.isEmpty()) { t.remove("display"); d = true; } }
-        if (d && t.isEmpty()) MinecraftCompat.setNbt(stack, null);
-    }
-
-    // Strip display metadata (Name + Lore) from item NBT for DB storage
+    // Store every original tag. CTM maps commonly use display, map, BlockEntityTag, and custom mod tags.
     static String nbtForStorage(ItemStack stack) {
         if (!MinecraftCompat.hasNbt(stack)) return null;
-        NbtCompound copy = MinecraftCompat.getNbt(stack).copy();
-        if (copy.contains("display")) {
-            NbtCompound dp = copy.getCompound("display");
-            dp.remove("Name"); dp.remove("Lore");
-            if (dp.isEmpty()) copy.remove("display");
-        }
-        return copy.isEmpty() ? null : copy.toString();
-    }
-
-    static void setMeta(ItemStack stack, DatabaseManager.BackpackItem item) {
-        if (item.placedBy == null) return;
-        NbtCompound tag = MinecraftCompat.getOrCreateNbt(stack);
-        NbtCompound display = tag.contains("display") ? tag.getCompound("display") : new NbtCompound();
-        net.minecraft.nbt.NbtList lore = new net.minecraft.nbt.NbtList();
-        lore.add(loreLine("\u00a78\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"));
-        lore.add(loreLine("\u00a77\u653e\u5165: \u00a7e" + item.placedBy
-                + (item.placedTime != null ? "  \u00a78" + fmtTime(item.placedTime) : "")));
-        if (item.placedCount > 0 && item.placedCount < 100_000) {
-            lore.add(loreLine("\u00a77\u7d2f\u8ba1\u653e\u5165: \u00a7a" + item.placedCount + " \u6b21"));
-        }
-        if (item.lastModifiedBy != null && !item.lastModifiedBy.equals(item.placedBy)) {
-            lore.add(loreLine("\u00a77\u6700\u540e\u64cd\u4f5c: \u00a7b" + item.lastModifiedBy
-                    + (item.lastModifiedTime != null ? "  \u00a78" + fmtTime(item.lastModifiedTime) : "")));
-        }
-        display.put("Lore", lore);
-        tag.put("display", display);
-    }
-
-    private static String fmtTime(String t) {
-        if (t == null) return "";
-        if (t.length() >= 16) return t.substring(5, 16); // "MM-dd HH:mm"
-        return t;
-    }
-
-    private static net.minecraft.nbt.NbtString loreLine(String text) {
-        String esc = text.replace("\\", "\\\\").replace("\"", "\\\"");
-        return net.minecraft.nbt.NbtString.of("{\"text\":\"" + esc + "\",\"italic\":false}");
+        return MinecraftCompat.getNbt(stack).copy().toString();
     }
 
     private List<DatabaseManager.BackpackItem> applySortOrder(List<DatabaseManager.BackpackItem> items) {
@@ -229,7 +181,7 @@ abstract class BackpackMenuBase extends ScreenHandler {
             if (displaySort != 0) {
                 items = applySortOrder(items);
             }
-            slotMap.clear(); slotTotalCount.clear();
+            slotMap.clear();
 
             // compactView: items rendered as a compact paginated list using slotMap
             boolean compactView = (searchFilter != null && !searchFilter.isEmpty()) || modFilter != null || displaySort != 0;
@@ -240,48 +192,22 @@ abstract class BackpackMenuBase extends ScreenHandler {
                     // Compact view: search / mod-filter / sort — build slotMap from filtered+sorted list
                     viewMaxPages = Math.max(1, (items.size() + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE);
                     if (page >= viewMaxPages) page = viewMaxPages - 1;
-                    Map<String, Integer> totalByKey = new LinkedHashMap<>();
-                    for (DatabaseManager.BackpackItem item : items) {
-                        String key = item.itemId + "\0" + (item.nbt != null ? item.nbt : "");
-                        totalByKey.merge(key, item.count, Integer::sum);
-                    }
                     int start = page * ITEMS_PER_PAGE;
                     int loc = 0;
                     for (int ii = start; ii < items.size() && loc < ITEMS_PER_PAGE; ii++) {
                         DatabaseManager.BackpackItem item = items.get(ii);
                         slotMap.put(loc, item.slot);
-                        String key = item.itemId + "\0" + (item.nbt != null ? item.nbt : "");
-                        int total = totalByKey.getOrDefault(key, item.count);
                         ItemStack st = SharedBackpack.toItemStack(item);
-                        setMeta(st, item);
-                        if (total > item.count) {
-                            slotTotalCount.put(loc, total);
-                            setStackedCountLore(st, total);
-                        }
                         handler.setStack(loc, st);
                         loaded++; loc++;
                     }
                 } else {
                     // Normal view: positional rendering by DB slot
                     viewMaxPages = maxPages;
-                    Map<String, Integer> totalByKey = new LinkedHashMap<>();
                     for (DatabaseManager.BackpackItem item : items) {
                         int loc = item.slot - startSlot;
                         if (loc < 0) continue; if (loc >= ITEMS_PER_PAGE) break;
-                        String key = item.itemId + "\0" + (item.nbt != null ? item.nbt : "");
-                        totalByKey.merge(key, item.count, Integer::sum);
-                    }
-                    for (DatabaseManager.BackpackItem item : items) {
-                        int loc = item.slot - startSlot;
-                        if (loc < 0) continue; if (loc >= ITEMS_PER_PAGE) break;
-                        String key = item.itemId + "\0" + (item.nbt != null ? item.nbt : "");
-                        int total = totalByKey.getOrDefault(key, item.count);
                         ItemStack st = SharedBackpack.toItemStack(item);
-                        setMeta(st, item);
-                        if (total > item.count) {
-                            slotTotalCount.put(loc, total);
-                            setStackedCountLore(st, total);
-                        }
                         handler.setStack(loc, st);
                         loaded++;
                     }
@@ -293,18 +219,6 @@ abstract class BackpackMenuBase extends ScreenHandler {
                 populateControlBar(loaded);
             }
         } finally { loading = false; }
-    }
-
-    static void setStackedCountLore(ItemStack stack, int total) {
-        NbtCompound tag = MinecraftCompat.getOrCreateNbt(stack);
-        NbtCompound display = tag.contains("display") ? tag.getCompound("display") : new NbtCompound();
-        // Prepend stacked count, keep existing lore (meta info) below
-        net.minecraft.nbt.NbtList existing = display.contains("Lore") ? display.getList("Lore", 8) : new net.minecraft.nbt.NbtList();
-        net.minecraft.nbt.NbtList lore = new net.minecraft.nbt.NbtList();
-        lore.add(loreLine("\u00a77\u5171 \u00a7a" + total + " \u00a77\u4e2a"));
-        for (int i = 0; i < existing.size(); i++) lore.add(existing.get(i));
-        display.put("Lore", lore);
-        tag.put("display", display);
     }
 
     private void populateControlBar(int loaded) {
@@ -384,7 +298,7 @@ abstract class BackpackMenuBase extends ScreenHandler {
         int ms = unloadMode ? GUI_SLOTS_UNLOAD : ITEMS_PER_PAGE;
         for (int i = 0; i < ms && !c.isEmpty(); i++) {
             Slot s = getSlot(i); if (s == null || !s.hasStack()) continue;
-            if (!tagsMatchIgnore(c, s.getStack())) continue;
+            if (!tagsMatchExactly(c, s.getStack())) continue;
             int ca = Math.min(c.getCount(), 64 - s.getStack().getCount());
             if (ca <= 0) continue;
             ItemStack m = s.getStack().copy(); m.increment(ca); c.decrement(ca); s.setStack(m);
@@ -475,8 +389,6 @@ abstract class BackpackMenuBase extends ScreenHandler {
 
     private void afterTake(int slotId, ItemStack stack) {
         if (!isControlSlot(slotId)) {
-            stripDisplay(stack);
-            stack.removeCustomName();
             dbRemove(realDbSlot(slotId), stack.getCount());
         }
     }
@@ -523,12 +435,10 @@ abstract class BackpackMenuBase extends ScreenHandler {
 
     // ===== Quick move =====
 
-    static boolean tagsMatchIgnore(ItemStack a, ItemStack b) {
+    static boolean tagsMatchExactly(ItemStack a, ItemStack b) {
         if (a.getItem() != b.getItem()) return false;
-        NbtCompound t1 = MinecraftCompat.hasNbt(a) ? MinecraftCompat.getNbt(a).copy() : null;
-        if (t1!=null){t1.remove("display");if(t1.isEmpty())t1=null;}
-        NbtCompound t2 = MinecraftCompat.hasNbt(b) ? MinecraftCompat.getNbt(b).copy() : null;
-        if (t2!=null){t2.remove("display");if(t2.isEmpty())t2=null;}
+        NbtCompound t1 = MinecraftCompat.hasNbt(a) ? MinecraftCompat.getNbt(a) : null;
+        NbtCompound t2 = MinecraftCompat.hasNbt(b) ? MinecraftCompat.getNbt(b) : null;
         return (t1==null&&t2==null)||(t1!=null&&t1.equals(t2));
     }
 
@@ -542,9 +452,8 @@ abstract class BackpackMenuBase extends ScreenHandler {
         ItemStack orig = src.copy();
 
         if (index < (unloadMode ? GUI_SLOTS_UNLOAD : GUI_SLOTS)) {
-            // Shift-click from backpack -> player inventory
+            // Shift-click from backpack -> player inventory without altering item NBT.
             ItemStack toMove = src.copy();
-            stripDisplay(toMove);
             if (!insertItem(toMove, invStart(), invEnd(), true)) return ItemStack.EMPTY;
             // How many were moved?
             int moved = src.getCount() - toMove.getCount();
