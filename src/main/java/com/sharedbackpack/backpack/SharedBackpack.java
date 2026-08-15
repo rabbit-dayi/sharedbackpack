@@ -2,13 +2,13 @@ package com.sharedbackpack.backpack;
 
 import com.sharedbackpack.SharedBackpackMod;
 import com.sharedbackpack.database.DatabaseManager;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
+import net.minecraft.util.registry.Registry;
+import net.minecraft.nbt.NbtCompound;
+import net.minecraft.util.Identifier;
+import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 
 import java.util.*;
 
@@ -16,7 +16,7 @@ public class SharedBackpack {
 
     public static final int SLOTS_PER_PAGE = 45;
 
-    public static List<DatabaseManager.BackpackItem> getTeamItems(ServerPlayer player) {
+    public static List<DatabaseManager.BackpackItem> getTeamItems(ServerPlayerEntity player) {
         List<String> teams = TeamResolver.resolveTeams(player);
         // Union: collect items from all teams, merge duplicates by item_id
         Map<String, DatabaseManager.BackpackItem> merged = new LinkedHashMap<>();
@@ -41,34 +41,34 @@ public class SharedBackpack {
         return new ArrayList<>(merged.values());
     }
 
-    public static int getMaxPages(ServerPlayer player) {
+    public static int getMaxPages(ServerPlayerEntity player) {
         String teamId = TeamResolver.resolvePrimaryTeam(player);
         return SharedBackpackMod.database.getMaxPages(teamId);
     }
 
-    public static int getMaxSlots(ServerPlayer player) {
+    public static int getMaxSlots(ServerPlayerEntity player) {
         return getMaxPages(player) * SLOTS_PER_PAGE;
     }
 
-    public static boolean addItem(ServerPlayer player, ItemStack stack) {
+    public static boolean addItem(ServerPlayerEntity player, ItemStack stack) {
         if (stack.isEmpty()) return false;
         String teamId = TeamResolver.resolvePrimaryTeam(player);
-        String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+        String itemId = Registry.ITEM.getId(stack.getItem()).toString();
         String nbt = stack.hasTag() ? stripMetadata(stack.getTag().toString()) : null;
-        return SharedBackpackMod.database.addItem(teamId, itemId, stack.getCount(), nbt, player.getScoreboardName());
+        return SharedBackpackMod.database.addItem(teamId, itemId, stack.getCount(), nbt, player.getEntityName());
     }
 
     public static String stripMetadata(String nbtStr) {
         if (nbtStr == null || nbtStr.isEmpty()) return null;
         try {
-            CompoundTag tag = net.minecraft.nbt.TagParser.parseTag(nbtStr);
+            NbtCompound tag = net.minecraft.nbt.StringNbtReader.parse(nbtStr);
             tag.remove("placedBy");
             tag.remove("placedTime");
             tag.remove("placedCount");
             tag.remove("lastModifiedBy");
             tag.remove("lastModifiedTime");
             if (tag.contains("display")) {
-                CompoundTag display = tag.getCompound("display");
+                NbtCompound display = tag.getCompound("display");
                 display.remove("Lore");
                 if (display.isEmpty()) tag.remove("display");
             }
@@ -78,7 +78,7 @@ public class SharedBackpack {
         }
     }
 
-    public static boolean removeItem(ServerPlayer player, String teamId, int slot, int count) {
+    public static boolean removeItem(ServerPlayerEntity player, String teamId, int slot, int count) {
         List<String> teams = TeamResolver.resolveTeams(player);
         if (!teams.contains(teamId) && !teams.contains(TeamResolver.GLOBAL_TEAM)) {
             return false;
@@ -86,13 +86,13 @@ public class SharedBackpack {
         return SharedBackpackMod.database.removeItem(teamId, slot, count);
     }
 
-    public static boolean upgradePages(ServerPlayer player) {
+    public static boolean upgradePages(ServerPlayerEntity player) {
         String teamId = TeamResolver.resolvePrimaryTeam(player);
         return SharedBackpackMod.database.upgradePages(teamId, 1);
     }
 
     public static ItemStack toItemStack(DatabaseManager.BackpackItem bpItem) {
-        Item item = BuiltInRegistries.ITEM.get(ResourceLocation.parse(bpItem.itemId));
+        Item item = Registry.ITEM.get(new Identifier(bpItem.itemId));
         // Fallback to dirt if item not found (mod not loaded)
         if (item == null || item == Items.AIR) {
             item = Items.DIRT;
@@ -100,14 +100,14 @@ public class SharedBackpack {
         ItemStack stack = new ItemStack(item, Math.min(bpItem.count, 64));
         if (bpItem.nbt != null && !bpItem.nbt.isEmpty()) {
             try {
-                CompoundTag tag = net.minecraft.nbt.TagParser.parseTag(bpItem.nbt);
+                NbtCompound tag = net.minecraft.nbt.StringNbtReader.parse(bpItem.nbt);
                 stack.setTag(tag);
             } catch (Exception ignored) {}
         }
         return stack;
     }
 
-    public static int getTotalCount(ServerPlayer player) {
+    public static int getTotalCount(ServerPlayerEntity player) {
         List<String> teams = TeamResolver.resolveTeams(player);
         int total = 0;
         for (String teamId : teams) {

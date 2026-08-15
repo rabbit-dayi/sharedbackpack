@@ -21,21 +21,7 @@ public class ChineseNames {
         int total = 0;
         int files = 0;
 
-        // Approach 1: server resource manager (works for resource packs)
-        try {
-            var resources = server.getResourceManager()
-                .listResources("lang", loc -> loc.getPath().endsWith("zh_cn.json"));
-            for (var entry : resources.entrySet()) {
-                try (Reader r = new InputStreamReader(entry.getValue().open(), StandardCharsets.UTF_8)) {
-                    Map<String, String> m = GSON.fromJson(r, MAP_TYPE);
-                    if (m != null) { zhCN.putAll(m); total += m.size(); files++; }
-                }
-            }
-        } catch (Exception e) {
-            SharedBackpackMod.LOGGER.debug("Resource scan: {}", e.getMessage());
-        }
-
-        // Approach 2: classpath scan for vanilla assets
+        // Classpath scan includes this mod's bundled language data on dedicated servers.
         try {
             Enumeration<URL> urls = ChineseNames.class.getClassLoader()
                 .getResources("assets/minecraft/lang/zh_cn.json");
@@ -50,7 +36,7 @@ public class ChineseNames {
             SharedBackpackMod.LOGGER.debug("Classpath scan: {}", e.getMessage());
         }
 
-        // Approach 3: direct from MinecraftServer class JAR
+        // Direct lookup also works with Minecraft's server JAR.
         try (java.io.InputStream in = net.minecraft.server.MinecraftServer.class
                 .getResourceAsStream("/assets/minecraft/lang/zh_cn.json")) {
             if (in != null) {

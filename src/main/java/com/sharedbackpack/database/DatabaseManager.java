@@ -19,7 +19,7 @@ public class DatabaseManager {
     private static final int SLOTS_PER_PAGE = 45;
 
     public DatabaseManager(MinecraftServer server) {
-        File modDir = new File(server.getServerDirectory(), "config/sharedbackpack");
+        File modDir = new File(server.getRunDirectory(), "config/sharedbackpack");
         modDir.mkdirs();
         this.dbFile = new File(modDir, "backpack.db");
         this.backupDir = new File(modDir, "backups");
@@ -29,6 +29,7 @@ public class DatabaseManager {
     public void init() {
         try {
             backupBeforeInit();
+            Class.forName("org.sqlite.JDBC");
             connection = DriverManager.getConnection("jdbc:sqlite:" + dbFile.getAbsolutePath());
             connection.setAutoCommit(true);
             createTables();
@@ -71,30 +72,15 @@ public class DatabaseManager {
 
     private void createTables() throws SQLException {
         try (Statement stmt = connection.createStatement()) {
-            stmt.execute("""
-                CREATE TABLE IF NOT EXISTS backpack_meta (
-                    team_id TEXT PRIMARY KEY,
-                    max_pages INTEGER NOT NULL DEFAULT 1,
-                    created_at TEXT DEFAULT (datetime('now','localtime')),
-                    updated_at TEXT DEFAULT (datetime('now','localtime'))
-                )
-            """);
-            stmt.execute("""
-                CREATE TABLE IF NOT EXISTS backpack_items (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    team_id TEXT NOT NULL,
-                    item_id TEXT NOT NULL,
-                    count INTEGER NOT NULL DEFAULT 0,
-                    slot INTEGER NOT NULL DEFAULT 0,
-                    nbt TEXT,
-                    placed_by TEXT,
-                    placed_time TEXT,
-                    placed_count INTEGER DEFAULT 0,
-                    last_modified_by TEXT,
-                    last_modified_time TEXT,
-                    UNIQUE(team_id, slot)
-                )
-            """);
+            stmt.execute("CREATE TABLE IF NOT EXISTS backpack_meta ("
+                    + "team_id TEXT PRIMARY KEY, max_pages INTEGER NOT NULL DEFAULT 1, "
+                    + "created_at TEXT DEFAULT (datetime('now','localtime')), "
+                    + "updated_at TEXT DEFAULT (datetime('now','localtime')))" );
+            stmt.execute("CREATE TABLE IF NOT EXISTS backpack_items ("
+                    + "id INTEGER PRIMARY KEY AUTOINCREMENT, team_id TEXT NOT NULL, item_id TEXT NOT NULL, "
+                    + "count INTEGER NOT NULL DEFAULT 0, slot INTEGER NOT NULL DEFAULT 0, nbt TEXT, "
+                    + "placed_by TEXT, placed_time TEXT, placed_count INTEGER DEFAULT 0, "
+                    + "last_modified_by TEXT, last_modified_time TEXT, UNIQUE(team_id, slot))");
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_team_items ON backpack_items(team_id)");
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_item_search ON backpack_items(item_id)");
 
@@ -106,43 +92,21 @@ public class DatabaseManager {
             try { stmt.execute("ALTER TABLE backpack_items ADD COLUMN last_modified_time TEXT"); } catch (SQLException ignored) {}
 
             // Player boxes
-            stmt.execute("""
-                CREATE TABLE IF NOT EXISTS player_box_meta (
-                    owner_uuid TEXT NOT NULL,
-                    box_name TEXT NOT NULL,
-                    max_pages INTEGER NOT NULL DEFAULT 1,
-                    created_at TEXT DEFAULT (datetime('now','localtime')),
-                    updated_at TEXT DEFAULT (datetime('now','localtime')),
-                    PRIMARY KEY(owner_uuid, box_name)
-                )
-            """);
-            stmt.execute("""
-                CREATE TABLE IF NOT EXISTS player_box_items (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    owner_uuid TEXT NOT NULL,
-                    box_name TEXT NOT NULL,
-                    item_id TEXT NOT NULL,
-                    count INTEGER NOT NULL DEFAULT 0,
-                    slot INTEGER NOT NULL DEFAULT 0,
-                    nbt TEXT,
-                    placed_by TEXT,
-                    placed_time TEXT,
-                    placed_count INTEGER DEFAULT 0,
-                    last_modified_by TEXT,
-                    last_modified_time TEXT,
-                    UNIQUE(owner_uuid, box_name, slot)
-                )
-            """);
+            stmt.execute("CREATE TABLE IF NOT EXISTS player_box_meta ("
+                    + "owner_uuid TEXT NOT NULL, box_name TEXT NOT NULL, max_pages INTEGER NOT NULL DEFAULT 1, "
+                    + "created_at TEXT DEFAULT (datetime('now','localtime')), "
+                    + "updated_at TEXT DEFAULT (datetime('now','localtime')), "
+                    + "PRIMARY KEY(owner_uuid, box_name))");
+            stmt.execute("CREATE TABLE IF NOT EXISTS player_box_items ("
+                    + "id INTEGER PRIMARY KEY AUTOINCREMENT, owner_uuid TEXT NOT NULL, box_name TEXT NOT NULL, "
+                    + "item_id TEXT NOT NULL, count INTEGER NOT NULL DEFAULT 0, slot INTEGER NOT NULL DEFAULT 0, "
+                    + "nbt TEXT, placed_by TEXT, placed_time TEXT, placed_count INTEGER DEFAULT 0, "
+                    + "last_modified_by TEXT, last_modified_time TEXT, UNIQUE(owner_uuid, box_name, slot))");
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_box_owner ON player_box_items(owner_uuid, box_name)");
 
             // Player binds (persistent across restarts)
-            stmt.execute("""
-                CREATE TABLE IF NOT EXISTS player_binds (
-                    player_uuid TEXT PRIMARY KEY,
-                    item_id TEXT NOT NULL,
-                    box_target TEXT
-                )
-            """);
+            stmt.execute("CREATE TABLE IF NOT EXISTS player_binds ("
+                    + "player_uuid TEXT PRIMARY KEY, item_id TEXT NOT NULL, box_target TEXT)");
         }
     }
 
@@ -310,13 +274,10 @@ public class DatabaseManager {
     public synchronized boolean upgradePages(String teamId, int additionalPages) {
         if (!isReady()) return false;
         try {
-            String upsertSql = """
-                INSERT INTO backpack_meta (team_id, max_pages, created_at, updated_at)
-                VALUES (?, 1 + ?, datetime('now','localtime'), datetime('now','localtime'))
-                ON CONFLICT(team_id) DO UPDATE SET
-                    max_pages = max_pages + ?,
-                    updated_at = datetime('now','localtime')
-            """;
+            String upsertSql = "INSERT INTO backpack_meta (team_id, max_pages, created_at, updated_at) "
+                    + "VALUES (?, 1 + ?, datetime('now','localtime'), datetime('now','localtime')) "
+                    + "ON CONFLICT(team_id) DO UPDATE SET max_pages = max_pages + ?, "
+                    + "updated_at = datetime('now','localtime')";
             try (PreparedStatement ps = connection.prepareStatement(upsertSql)) {
                 ps.setString(1, teamId);
                 ps.setInt(2, additionalPages);
@@ -604,6 +565,25 @@ public class DatabaseManager {
             if (rs.next()) return rs.getInt("max_pages");
         } catch (SQLException e) { SharedBackpackMod.LOGGER.error("Failed getBoxMaxPages", e); }
         return 1;
+    }
+
+    public synchronized boolean upgradeBoxPages(String owner, String box, int additionalPages) {
+        if (!isReady()) return false;
+        try (PreparedStatement ps = connection.prepareStatement(
+                "INSERT INTO player_box_meta (owner_uuid, box_name, max_pages, created_at, updated_at) "
+                        + "VALUES (?, ?, 1 + ?, datetime('now','localtime'), datetime('now','localtime')) "
+                        + "ON CONFLICT(owner_uuid, box_name) DO UPDATE SET max_pages = max_pages + ?, "
+                        + "updated_at = datetime('now','localtime')")) {
+            ps.setString(1, owner);
+            ps.setString(2, box);
+            ps.setInt(3, additionalPages);
+            ps.setInt(4, additionalPages);
+            ps.executeUpdate();
+            return true;
+        } catch (SQLException e) {
+            SharedBackpackMod.LOGGER.error("Failed to upgrade box {}/{}", owner, box, e);
+            return false;
+        }
     }
 
     public synchronized boolean addBoxItem(String owner, String box, String itemId, int count, String nbt, String playerName) {

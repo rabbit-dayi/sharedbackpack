@@ -2,11 +2,11 @@ package com.sharedbackpack.commands;
 
 import com.sharedbackpack.SharedBackpackMod;
 import com.sharedbackpack.database.DatabaseManager;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
+import net.minecraft.util.registry.Registry;
+import net.minecraft.util.Identifier;
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -19,7 +19,7 @@ public class BindManager {
     public static void loadAll() {
         BINDS.clear(); BOX_TARGETS.clear();
         if (SharedBackpackMod.database == null) return;
-        for (var e : SharedBackpackMod.database.loadAllBinds().entrySet()) {
+        for (Map.Entry<String, DatabaseManager.BindEntry> e : SharedBackpackMod.database.loadAllBinds().entrySet()) {
             BINDS.put(e.getKey(), e.getValue().itemId);
             if (e.getValue().boxTarget != null) BOX_TARGETS.put(e.getKey(), e.getValue().boxTarget);
         }
@@ -31,7 +31,7 @@ public class BindManager {
             BINDS.remove(playerId);
             SharedBackpackMod.database.deleteBind(playerId);
         } else {
-            String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+            String itemId = Registry.ITEM.getId(stack.getItem()).toString();
             BINDS.put(playerId, itemId);
             SharedBackpackMod.database.saveBind(playerId, itemId, null);
         }
@@ -39,7 +39,7 @@ public class BindManager {
 
     public static void bindToBox(String playerId, ItemStack stack, String boxName) {
         if (stack.isEmpty()) return;
-        String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+        String itemId = Registry.ITEM.getId(stack.getItem()).toString();
         BINDS.put(playerId, itemId);
         BOX_TARGETS.put(playerId, boxName);
         SharedBackpackMod.database.saveBind(playerId, itemId, boxName);
@@ -54,7 +54,7 @@ public class BindManager {
     public static boolean matches(String playerId, ItemStack stack) {
         String bound = BINDS.get(playerId);
         if (bound == null) return stack.getItem() == Items.CARROT;
-        Item item = BuiltInRegistries.ITEM.get(ResourceLocation.tryParse(bound));
+        Item item = Registry.ITEM.get(new Identifier(bound));
         return item != null && stack.getItem() == item;
     }
 
