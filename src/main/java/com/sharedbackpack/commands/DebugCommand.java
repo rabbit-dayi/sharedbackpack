@@ -330,7 +330,7 @@ public class DebugCommand {
             return 0;
         }
         final String regName = MinecraftCompat.getItemId(item).toString();
-        final String displayName = item.getName().getString();
+        final String displayName = MinecraftCompat.getItemDisplayName(item);
         final String descId = item.getTranslationKey();
         final String cnName = ChineseNames.get(descId);
         final int maxStack = item.getMaxCount();
@@ -713,6 +713,6 @@ public class DebugCommand {
         if (item == null || item == Items.AIR) return itemId;
         String cn = ChineseNames.get(item.getTranslationKey());
         if (cn != null) return cn + " (" + itemId + ")";
-        return item.getName().getString() + " (" + itemId + ")";
+        return MinecraftCompat.getItemDisplayName(item) + " (" + itemId + ")";
     }
 }

@@ -28,7 +28,7 @@ public final class MinecraftCompat {
     }
 
     public static String getItemDisplayName(Item item) {
-        return item.getName().getString();
+        return new ItemStack(item).getName().getString();
     }
 
     public static Iterable<Item> items() {

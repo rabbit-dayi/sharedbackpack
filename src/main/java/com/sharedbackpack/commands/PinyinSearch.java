@@ -95,7 +95,7 @@ public class PinyinSearch {
             if (id == null) continue;
 
             String itemId = id.toString().toLowerCase();
-            String name = item.getName().getString().toLowerCase();
+            String name = MinecraftCompat.getItemDisplayName(item).toLowerCase();
             String cnName = ChineseNames.get(item.getTranslationKey());
 
             boolean matched = itemId.contains(q) || name.contains(q)
