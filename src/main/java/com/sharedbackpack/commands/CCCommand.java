@@ -5,12 +5,11 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.sharedbackpack.SharedBackpackMod;
 import com.sharedbackpack.backpack.TeamResolver;
+import com.sharedbackpack.compat.MinecraftCompat;
 import com.sharedbackpack.database.DatabaseManager;
 import com.sharedbackpack.gui.BackpackMenu;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.command.CommandManager;
-import net.minecraft.util.registry.Registry;
-import net.minecraft.text.LiteralText;
 import net.minecraft.util.Identifier;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.entity.Entity;
@@ -92,23 +91,23 @@ public class CCCommand {
     }
 
     private static int showHelp(ServerCommandSource src) {
-        src.sendFeedback(new LiteralText("§6=== Shared Backpack Help ==="), false);
-        src.sendFeedback(new LiteralText("§e/c §7- 打开共享背包"), false);
-        src.sendFeedback(new LiteralText("§e/c <搜索词> §7- 打开并搜索物品(拼音/英文/ID)"), false);
-        src.sendFeedback(new LiteralText("§e/cc help §7- 显示此帮助"), false);
-        src.sendFeedback(new LiteralText("§e/cc unload §7- 卸货模式(无按钮,纯格子)"), false);
-        src.sendFeedback(new LiteralText("§e/cc admin info <team> §7- 查看队伍背包信息"), false);
-        src.sendFeedback(new LiteralText("§e/cc admin clear <team> §7- 清空队伍背包"), false);
-        src.sendFeedback(new LiteralText("§e/cc admin upgrade <team> <pages> §7- 升级队伍背包页数"), false);
-        src.sendFeedback(new LiteralText("§e/cc admin backup §7- 强制备份数据库"), false);
-        src.sendFeedback(new LiteralText("§e/cc admin reload §7- 重新加载数据库"), false);
-        src.sendFeedback(new LiteralText("§e/cc search <query> §7- 搜索物品（支持拼音）"), false);
-        src.sendFeedback(new LiteralText("§e/cc box create <name> §7- 创建个人盒子"), false);
-        src.sendFeedback(new LiteralText("§e/cc box open <name> §7- 打开个人盒子"), false);
-        src.sendFeedback(new LiteralText("§e/cc box list §7- 列出个人盒子"), false);
-        src.sendFeedback(new LiteralText("§e/cc box delete <name> §7- 删除个人盒子"), false);
-        src.sendFeedback(new LiteralText("§e/cc bind §7- 将手持物品绑定为背包钥匙"), false);
-        src.sendFeedback(new LiteralText("§e/cc unbind §7- 解绑背包钥匙"), false);
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§6=== Shared Backpack Help ==="));
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§e/c §7- 打开共享背包"));
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§e/c <搜索词> §7- 打开并搜索物品(拼音/英文/ID)"));
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§e/cc help §7- 显示此帮助"));
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§e/cc unload §7- 卸货模式(无按钮,纯格子)"));
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§e/cc admin info <team> §7- 查看队伍背包信息"));
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§e/cc admin clear <team> §7- 清空队伍背包"));
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§e/cc admin upgrade <team> <pages> §7- 升级队伍背包页数"));
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§e/cc admin backup §7- 强制备份数据库"));
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§e/cc admin reload §7- 重新加载数据库"));
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§e/cc search <query> §7- 搜索物品（支持拼音）"));
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§e/cc box create <name> §7- 创建个人盒子"));
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§e/cc box open <name> §7- 打开个人盒子"));
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§e/cc box list §7- 列出个人盒子"));
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§e/cc box delete <name> §7- 删除个人盒子"));
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§e/cc bind §7- 将手持物品绑定为背包钥匙"));
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§e/cc unbind §7- 解绑背包钥匙"));
         return 1;
     }
 
@@ -116,53 +115,53 @@ public class CCCommand {
         if (SharedBackpackMod.database != null) {
             SharedBackpackMod.database.close();
         }
-        SharedBackpackMod.database = new com.sharedbackpack.database.DatabaseManager(src.getMinecraftServer());
+        SharedBackpackMod.database = new com.sharedbackpack.database.DatabaseManager(MinecraftCompat.getServer(src));
         SharedBackpackMod.database.init();
-        src.sendFeedback(new LiteralText("§a数据库已重新加载"), false);
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§a数据库已重新加载"));
         return 1;
     }
 
     private static int forceBackup(ServerCommandSource src) {
         try {
-            java.io.File dbFile = new java.io.File(src.getMinecraftServer().getRunDirectory(), "config/sharedbackpack/backpack.db");
+            java.io.File dbFile = new java.io.File(MinecraftCompat.getServer(src).getRunDirectory(), "config/sharedbackpack/backpack.db");
             if (dbFile.exists()) {
                 String timestamp = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
                 java.io.File backupDir = new java.io.File(dbFile.getParent(), "backups");
                 backupDir.mkdirs();
                 java.io.File backup = new java.io.File(backupDir, "backpack_backup_" + timestamp + ".db");
                 java.nio.file.Files.copy(dbFile.toPath(), backup.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-                src.sendFeedback(new LiteralText("§a备份已创建: " + backup.getName()), false);
+                MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§a备份已创建: " + backup.getName()));
             } else {
-                src.sendFeedback(new LiteralText("§c数据库文件不存在"), false);
+                MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§c数据库文件不存在"));
             }
         } catch (Exception e) {
-            src.sendFeedback(new LiteralText("§c备份失败: " + e.getMessage()), false);
+            MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§c备份失败: " + e.getMessage()));
         }
         return 1;
     }
 
     private static int showTeamInfo(ServerCommandSource src, String teamId) {
         String info = SharedBackpackMod.database.getBackpackInfo(teamId);
-        src.sendFeedback(new LiteralText("§6" + info), false);
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§6" + info));
         return 1;
     }
 
     private static int clearTeam(ServerCommandSource src, String teamId) {
-        src.sendFeedback(new LiteralText("§c清空功能开发中..."), false);
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§c清空功能开发中..."));
         return 1;
     }
 
     private static int upgradeTeam(ServerCommandSource src, String teamId, int pages) {
         if (SharedBackpackMod.database.upgradePages(teamId, pages)) {
-            src.sendFeedback(new LiteralText("§a已为队伍 " + teamId + " 添加 " + pages + " 页"), false);
+            MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§a已为队伍 " + teamId + " 添加 " + pages + " 页"));
         } else {
-            src.sendError(new LiteralText("§c升级失败"));
+            src.sendError(MinecraftCompat.text("§c升级失败"));
         }
         return 1;
     }
 
     private static int listTeams(ServerCommandSource src) {
-        src.sendFeedback(new LiteralText("§6队伍列表功能开发中..."), false);
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§6队伍列表功能开发中..."));
         return 1;
     }
 
@@ -171,7 +170,7 @@ public class CCCommand {
         if (player != null) {
             List<DatabaseManager.BackpackItem> items = SharedBackpackMod.database.getItems(TeamResolver.resolvePrimaryTeam(player));
             List<DatabaseManager.BackpackItem> results = PinyinSearch.search(items, query);
-            src.sendFeedback(new LiteralText("§6找到 " + results.size() + " 个匹配物品"), false);
+            MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§6找到 " + results.size() + " 个匹配物品"));
         }
         return 1;
     }
@@ -180,26 +179,26 @@ public class CCCommand {
         ServerPlayerEntity player = player(src);
         if (player != null) {
             BackpackMenu.openForPlayer(player, "", 0, true, false, null);
-            src.sendFeedback(new LiteralText("§a已打开卸货模式（无功能按钮）"), false);
+            MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§a已打开卸货模式（无功能按钮）"));
         } else {
-            src.sendError(new LiteralText("此命令只能由玩家使用"));
+            src.sendError(MinecraftCompat.text("此命令只能由玩家使用"));
         }
         return 1;
     }
 
     private static int testPinyin(ServerCommandSource src, String text) {
         boolean match = PinyinUtil.matches("泥土", text);
-        src.sendFeedback(new LiteralText("§6" + text + " 匹配泥土: " + match), false);
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§6" + text + " 匹配泥土: " + match));
         return 1;
     }
 
     private static int lookupItem(ServerCommandSource src, String id) {
-        Item item = Registry.ITEM.get(new Identifier(id));
+        Item item = MinecraftCompat.getItem(new Identifier(id));
         if (item == null || item == Items.AIR) {
-            src.sendFeedback(new LiteralText("§c物品 " + id + " 未找到"), false);
+            MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§c物品 " + id + " 未找到"));
         } else {
             String name = item.getName().getString();
-            src.sendFeedback(new LiteralText("§6" + id + " = " + name + " | py:" + PinyinUtil.toPinyin(name)), false);
+            MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§6" + id + " = " + name + " | py:" + PinyinUtil.toPinyin(name)));
         }
         return 1;
     }
@@ -207,18 +206,18 @@ public class CCCommand {
     private static int createBox(ServerCommandSource src, String name) {
         ServerPlayerEntity player = player(src);
         if (player == null) {
-            src.sendError(new LiteralText("此命令只能由玩家使用")); return 0;
+            src.sendError(MinecraftCompat.text("此命令只能由玩家使用")); return 0;
         }
         String team = TeamResolver.resolvePrimaryTeam(player);
         SharedBackpackMod.database.createBox(team, name);
-        src.sendFeedback(new LiteralText("§a盒子 '" + name + "' 已创建"), false);
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§a盒子 '" + name + "' 已创建"));
         return 1;
     }
 
     private static int openBox(ServerCommandSource src, String name) {
         ServerPlayerEntity player = player(src);
         if (player == null) {
-            src.sendError(new LiteralText("此命令只能由玩家使用")); return 0;
+            src.sendError(MinecraftCompat.text("此命令只能由玩家使用")); return 0;
         }
         String team = TeamResolver.resolvePrimaryTeam(player);
         BackpackMenu.openForPlayer(player, "", 0, false, true, team + ":" + name);
@@ -228,14 +227,14 @@ public class CCCommand {
     private static int listBoxes(ServerCommandSource src) {
         ServerPlayerEntity player = player(src);
         if (player == null) {
-            src.sendError(new LiteralText("此命令只能由玩家使用")); return 0;
+            src.sendError(MinecraftCompat.text("此命令只能由玩家使用")); return 0;
         }
         String team = TeamResolver.resolvePrimaryTeam(player);
         List<String> boxes = SharedBackpackMod.database.listBoxes(team);
-        if (boxes.isEmpty()) src.sendFeedback(new LiteralText("§7队伍没有盒子"), false);
+        if (boxes.isEmpty()) MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§7队伍没有盒子"));
         else {
-            src.sendFeedback(new LiteralText("§6盒子列表:"), false);
-            for (String b : boxes) src.sendFeedback(new LiteralText(" §e- " + b), false);
+            MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§6盒子列表:"));
+            for (String b : boxes) MinecraftCompat.sendFeedback(src, MinecraftCompat.text(" §e- " + b));
         }
         return 1;
     }
@@ -243,59 +242,59 @@ public class CCCommand {
     private static int deleteBox(ServerCommandSource src, String name) {
         ServerPlayerEntity player = player(src);
         if (player == null) {
-            src.sendError(new LiteralText("此命令只能由玩家使用")); return 0;
+            src.sendError(MinecraftCompat.text("此命令只能由玩家使用")); return 0;
         }
         String team = TeamResolver.resolvePrimaryTeam(player);
         SharedBackpackMod.database.deleteBox(team, name);
-        src.sendFeedback(new LiteralText("§a盒子 '" + name + "' 已删除"), false);
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§a盒子 '" + name + "' 已删除"));
         return 1;
     }
 
     private static int upgradeBox(ServerCommandSource src, String name) {
         ServerPlayerEntity player = player(src);
         if (player == null) {
-            src.sendError(new LiteralText("此命令只能由玩家使用")); return 0;
+            src.sendError(MinecraftCompat.text("此命令只能由玩家使用")); return 0;
         }
         SharedBackpackMod.database.upgradeBoxPages(TeamResolver.resolvePrimaryTeam(player), name, 1);
-        src.sendFeedback(new LiteralText("§a盒子 '" + name + "' 已升级"), false);
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§a盒子 '" + name + "' 已升级"));
         return 1;
     }
 
     private static int bindItem(ServerCommandSource src) {
         ServerPlayerEntity player = player(src);
         if (player == null) {
-            src.sendError(new LiteralText("此命令只能由玩家使用")); return 0;
+            src.sendError(MinecraftCompat.text("此命令只能由玩家使用")); return 0;
         }
         ItemStack stack = player.getMainHandStack();
         if (stack.isEmpty()) {
-            src.sendError(new LiteralText("请手持一个物品")); return 0;
+            src.sendError(MinecraftCompat.text("请手持一个物品")); return 0;
         }
         BindManager.bind(player.getUuidAsString(), stack);
-        src.sendFeedback(new LiteralText("§a已绑定 " + stack.getName().getString() + " 为背包钥匙"), false);
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§a已绑定 " + stack.getName().getString() + " 为背包钥匙"));
         return 1;
     }
 
     private static int bindToBox(ServerCommandSource src, String boxName) {
         ServerPlayerEntity player = player(src);
         if (player == null) {
-            src.sendError(new LiteralText("此命令只能由玩家使用")); return 0;
+            src.sendError(MinecraftCompat.text("此命令只能由玩家使用")); return 0;
         }
         ItemStack stack = player.getMainHandStack();
         if (stack.isEmpty()) {
-            src.sendError(new LiteralText("请手持一个物品")); return 0;
+            src.sendError(MinecraftCompat.text("请手持一个物品")); return 0;
         }
         BindManager.bindToBox(player.getUuidAsString(), stack, boxName);
-        src.sendFeedback(new LiteralText("§a已绑定 " + stack.getName().getString() + " → 快速打开盒子: " + boxName), false);
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§a已绑定 " + stack.getName().getString() + " → 快速打开盒子: " + boxName));
         return 1;
     }
 
     private static int unbindItem(ServerCommandSource src) {
         ServerPlayerEntity player = player(src);
         if (player == null) {
-            src.sendError(new LiteralText("此命令只能由玩家使用")); return 0;
+            src.sendError(MinecraftCompat.text("此命令只能由玩家使用")); return 0;
         }
         BindManager.unbind(player.getUuidAsString());
-        src.sendFeedback(new LiteralText("§a已解绑。请使用 /cc bind 绑定手持物品作为背包钥匙"), false);
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§a已解绑。请使用 /cc bind 绑定手持物品作为背包钥匙"));
         return 1;
     }
 

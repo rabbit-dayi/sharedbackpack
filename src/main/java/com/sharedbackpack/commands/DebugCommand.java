@@ -5,13 +5,12 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.sharedbackpack.SharedBackpackMod;
+import com.sharedbackpack.compat.MinecraftCompat;
 import com.sharedbackpack.database.DatabaseManager;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.entity.Entity;
-import net.minecraft.util.registry.Registry;
-import net.minecraft.text.LiteralText;
 import net.minecraft.util.Identifier;
 import net.minecraft.item.Item;
 import net.minecraft.item.Items;
@@ -188,7 +187,7 @@ public class DebugCommand {
 
     // ===== 2. dbinfo =====
     private static int dbInfo(ServerCommandSource src) {
-        final File dbFile = new File(src.getMinecraftServer().getRunDirectory(), "config/sharedbackpack/backpack.db");
+        final File dbFile = new File(MinecraftCompat.getServer(src).getRunDirectory(), "config/sharedbackpack/backpack.db");
         final String path = dbFile.getAbsolutePath();
         final String exists = dbFile.exists() ? "true" : "false";
         final String size = dbFile.exists() ? (dbFile.length() / 1024) + " KB" : "N/A";
@@ -212,18 +211,18 @@ public class DebugCommand {
     private static void sendDebugFeedback(ServerCommandSource src, String message) {
         Entity entity = src.getEntity();
         if (entity instanceof ServerPlayerEntity) {
-            ((ServerPlayerEntity) entity).sendMessage(new LiteralText(message), false);
+            ((ServerPlayerEntity) entity).sendMessage(MinecraftCompat.text(message), false);
         } else {
-            src.sendFeedback(new LiteralText(message), false);
+            MinecraftCompat.sendFeedback(src, MinecraftCompat.text(message));
         }
     }
 
     // ===== 3. tablecounts =====
     private static int tableCounts(ServerCommandSource src) {
         if (!checkDb(src)) return 0;
-        src.sendFeedback(new LiteralText("§6=== Row counts ==="), false);
-        src.sendFeedback(new LiteralText("§eUse §6/ccdebug count <team> §eto check specific team"), false);
-        src.sendFeedback(new LiteralText("§eUse §6/ccdebug teaminfo <team> §efor full info"), false);
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§6=== Row counts ==="));
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§eUse §6/ccdebug count <team> §eto check specific team"));
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§eUse §6/ccdebug teaminfo <team> §efor full info"));
         return 1;
     }
 
@@ -233,7 +232,7 @@ public class DebugCommand {
         int total = SharedBackpackMod.database.getTotalItemCount(team);
         int slots = SharedBackpackMod.database.getItems(team).size();
         final String msg = "§6Team " + team + ": §e" + total + " items §7across §e" + slots + " slots";
-        src.sendFeedback(new LiteralText(msg), false);
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text(msg));
         return 1;
     }
 
@@ -244,21 +243,21 @@ public class DebugCommand {
         int start = page * perPage;
         List<DatabaseManager.BackpackItem> all = SharedBackpackMod.database.getItems(team);
         final String header = "§6=== Page " + page + " (slots " + start + "-" + (start + perPage - 1) + ") ===";
-        src.sendFeedback(new LiteralText(header), false);
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text(header));
         int shown = 0;
         for (DatabaseManager.BackpackItem it : all) {
             if (it.slot >= start && it.slot < start + perPage) {
                 final String name = getDisplayName(it.itemId);
                 final String line = " §e[" + it.slot + "] " + name + " §7x" + it.count;
-                src.sendFeedback(new LiteralText(line), false);
+                MinecraftCompat.sendFeedback(src, MinecraftCompat.text(line));
                 shown++;
             }
         }
         final int s = shown;
-        if (s == 0) src.sendFeedback(new LiteralText(" §7(empty)"), false);
+        if (s == 0) MinecraftCompat.sendFeedback(src, MinecraftCompat.text(" §7(empty)"));
         else {
             final String footer = "§7Shown " + s + " slots";
-            src.sendFeedback(new LiteralText(footer), false);
+            MinecraftCompat.sendFeedback(src, MinecraftCompat.text(footer));
         }
         return 1;
     }
@@ -266,9 +265,9 @@ public class DebugCommand {
     // ===== 6. additem =====
     private static int addItem(ServerCommandSource src, String team, String itemId, int count) {
         if (!checkDb(src)) return 0;
-        Item item = Registry.ITEM.get(new Identifier(itemId));
+        Item item = MinecraftCompat.getItem(new Identifier(itemId));
         if (item == null || item == Items.AIR) {
-            src.sendError(new LiteralText("§cItem not found: " + itemId));
+            src.sendError(MinecraftCompat.text("§cItem not found: " + itemId));
             return 0;
         }
         long t0 = System.currentTimeMillis();
@@ -277,12 +276,12 @@ public class DebugCommand {
         if (ok) {
             final String name = getDisplayName(itemId);
             final String msg = "§aAdded " + count + "x " + name + " to " + team + " (" + ms + "ms)";
-            src.sendFeedback(new LiteralText(msg), false);
+            MinecraftCompat.sendFeedback(src, MinecraftCompat.text(msg));
             final int newTotal = SharedBackpackMod.database.getTotalItemCount(team);
             final String msg2 = "§7New total: " + newTotal;
-            src.sendFeedback(new LiteralText(msg2), false);
+            MinecraftCompat.sendFeedback(src, MinecraftCompat.text(msg2));
         } else {
-            src.sendError(new LiteralText("§cFailed to add. Backpack may be full."));
+            src.sendError(MinecraftCompat.text("§cFailed to add. Backpack may be full."));
         }
         return 1;
     }
@@ -295,9 +294,9 @@ public class DebugCommand {
         long ms = System.currentTimeMillis() - t0;
         if (ok) {
             final String msg = "§aRemoved " + count + " from slot " + slot + " in " + team + " (" + ms + "ms)";
-            src.sendFeedback(new LiteralText(msg), false);
+            MinecraftCompat.sendFeedback(src, MinecraftCompat.text(msg));
         } else {
-            src.sendError(new LiteralText("§cSlot " + slot + " not found or empty in team " + team));
+            src.sendError(MinecraftCompat.text("§cSlot " + slot + " not found or empty in team " + team));
         }
         return 1;
     }
@@ -305,9 +304,9 @@ public class DebugCommand {
     // ===== 8. setitem =====
     private static int setItem(ServerCommandSource src, String team, int slot, String itemId, int count) {
         if (!checkDb(src)) return 0;
-        Item item = Registry.ITEM.get(new Identifier(itemId));
+        Item item = MinecraftCompat.getItem(new Identifier(itemId));
         if (item == null || item == Items.AIR) {
-            src.sendError(new LiteralText("§cItem not found: " + itemId));
+            src.sendError(MinecraftCompat.text("§cItem not found: " + itemId));
             return 0;
         }
         long t0 = System.currentTimeMillis();
@@ -316,34 +315,34 @@ public class DebugCommand {
         if (ok) {
             final String name = getDisplayName(itemId);
             final String msg = "§aSet slot " + slot + " = " + count + "x " + name + " (" + ms + "ms)";
-            src.sendFeedback(new LiteralText(msg), false);
+            MinecraftCompat.sendFeedback(src, MinecraftCompat.text(msg));
         } else {
-            src.sendError(new LiteralText("§cFailed to set item"));
+            src.sendError(MinecraftCompat.text("§cFailed to set item"));
         }
         return 1;
     }
 
     // ===== 9. lookup =====
     private static int lookupItem(ServerCommandSource src, String itemId) {
-        Item item = Registry.ITEM.get(new Identifier(itemId));
+        Item item = MinecraftCompat.getItem(new Identifier(itemId));
         if (item == null || item == Items.AIR) {
-            src.sendError(new LiteralText("§cItem not found: " + itemId));
+            src.sendError(MinecraftCompat.text("§cItem not found: " + itemId));
             return 0;
         }
-        final String regName = Registry.ITEM.getId(item).toString();
+        final String regName = MinecraftCompat.getItemId(item).toString();
         final String displayName = item.getName().getString();
         final String descId = item.getTranslationKey();
         final String cnName = ChineseNames.get(descId);
         final int maxStack = item.getMaxCount();
-        src.sendFeedback(new LiteralText("§6ID: §e" + regName), false);
-        src.sendFeedback(new LiteralText("§6Name: §e" + displayName), false);
-        src.sendFeedback(new LiteralText("§6CN: §e" + (cnName != null ? cnName : "N/A")), false);
-        src.sendFeedback(new LiteralText("§6DescId: §e" + descId), false);
-        src.sendFeedback(new LiteralText("§6MaxStack: §e" + maxStack), false);
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§6ID: §e" + regName));
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§6Name: §e" + displayName));
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§6CN: §e" + (cnName != null ? cnName : "N/A")));
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§6DescId: §e" + descId));
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§6MaxStack: §e" + maxStack));
         if (cnName != null) {
             final boolean pyMatch = PinyinUtil.matches(cnName, "shi");
             final String pyMsg = "§6Pinyin match test('shi'): §e" + pyMatch;
-            src.sendFeedback(new LiteralText(pyMsg), false);
+            MinecraftCompat.sendFeedback(src, MinecraftCompat.text(pyMsg));
         }
         return 1;
     }
@@ -352,7 +351,7 @@ public class DebugCommand {
     private static int testPinyin(ServerCommandSource src, String text, String query) {
         boolean match = PinyinUtil.matches(text, query);
         final String msg = "§6matches(\"" + text + "\", \"" + query + "\") = §e" + match;
-        src.sendFeedback(new LiteralText(msg), false);
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text(msg));
         return 1;
     }
 
@@ -363,18 +362,18 @@ public class DebugCommand {
         List<DatabaseManager.BackpackItem> results = PinyinSearch.search(items, query);
         final int resultCount = results.size();
         final String header = "§6Search '" + query + "' in " + team + ": §e" + resultCount + " matches";
-        src.sendFeedback(new LiteralText(header), false);
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text(header));
         int show = Math.min(resultCount, 20);
         for (int i = 0; i < show; i++) {
             final DatabaseManager.BackpackItem it = results.get(i);
             final String name = getDisplayName(it.itemId);
             final String line = " §e[" + it.slot + "] " + name + " §7x" + it.count;
-            src.sendFeedback(new LiteralText(line), false);
+            MinecraftCompat.sendFeedback(src, MinecraftCompat.text(line));
         }
         if (resultCount > show) {
             final int remaining = resultCount - show;
             final String tail = " §7... and " + remaining + " more";
-            src.sendFeedback(new LiteralText(tail), false);
+            MinecraftCompat.sendFeedback(src, MinecraftCompat.text(tail));
         }
         return 1;
     }
@@ -385,7 +384,7 @@ public class DebugCommand {
         int pages = SharedBackpackMod.database.getMaxPages(team);
         int maxSlots = pages * 45;
         final String msg = "§6Team " + team + ": §e" + pages + " pages §7(" + maxSlots + " slots)";
-        src.sendFeedback(new LiteralText(msg), false);
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text(msg));
         return 1;
     }
 
@@ -398,9 +397,9 @@ public class DebugCommand {
         if (ok) {
             int newPages = SharedBackpackMod.database.getMaxPages(team);
             final String msg = "§aUpgraded " + team + " by " + pages + " pages. Now: " + newPages + " pages (" + ms + "ms)";
-            src.sendFeedback(new LiteralText(msg), false);
+            MinecraftCompat.sendFeedback(src, MinecraftCompat.text(msg));
         } else {
-            src.sendError(new LiteralText("§cUpgrade failed"));
+            src.sendError(MinecraftCompat.text("§cUpgrade failed"));
         }
         return 1;
     }
@@ -423,9 +422,9 @@ public class DebugCommand {
         int free = maxSlots - usedSlots;
         double pct = maxSlots > 0 ? (100.0 * usedSlots / maxSlots) : 0;
         final String line1 = "§6Team " + team + ": §e" + usedSlots + "/" + maxSlots + " slots used §7(" + String.format("%.1f", pct) + "%)";
-        src.sendFeedback(new LiteralText(line1), false);
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text(line1));
         final String line2 = "§6Free slots: §e" + free + " §7| Items: " + itemCount + " | Full stacks: " + fullSlots;
-        src.sendFeedback(new LiteralText(line2), false);
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text(line2));
         return 1;
     }
 
@@ -437,9 +436,9 @@ public class DebugCommand {
         int maxSlots = pages * 45;
         List<DatabaseManager.BackpackItem> boxItems = SharedBackpackMod.database.getBoxItems(owner, name);
         final String msg = "§6Box " + owner + "/" + name + ": §e" + pages + " pages | " + boxItems.size() + " slots | " + total + " items";
-        src.sendFeedback(new LiteralText(msg), false);
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text(msg));
         final String msg2 = "§6Max slots: §e" + maxSlots;
-        src.sendFeedback(new LiteralText(msg2), false);
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text(msg2));
         return 1;
     }
 
@@ -449,15 +448,15 @@ public class DebugCommand {
         List<String> boxes = SharedBackpackMod.database.listBoxes(owner);
         if (boxes.isEmpty()) {
             final String msg = "§7No boxes for " + owner;
-            src.sendFeedback(new LiteralText(msg), false);
+            MinecraftCompat.sendFeedback(src, MinecraftCompat.text(msg));
         } else {
             final int boxCount = boxes.size();
             final String header = "§6Boxes for " + owner + " (" + boxCount + "):";
-            src.sendFeedback(new LiteralText(header), false);
+            MinecraftCompat.sendFeedback(src, MinecraftCompat.text(header));
             for (String b : boxes) {
                 final int itemTotal = SharedBackpackMod.database.getTotalBoxItemCount(owner, b);
                 final String line = " §e- " + b + " §7(" + itemTotal + " items)";
-                src.sendFeedback(new LiteralText(line), false);
+                MinecraftCompat.sendFeedback(src, MinecraftCompat.text(line));
             }
         }
         return 1;
@@ -466,16 +465,16 @@ public class DebugCommand {
     // ===== 17. fillpage =====
     private static int fillPage(ServerCommandSource src, String team, int page, String itemId) {
         if (!checkDb(src)) return 0;
-        Item item = Registry.ITEM.get(new Identifier(itemId));
+        Item item = MinecraftCompat.getItem(new Identifier(itemId));
         if (item == null || item == Items.AIR) {
-            src.sendError(new LiteralText("§cItem not found: " + itemId));
+            src.sendError(MinecraftCompat.text("§cItem not found: " + itemId));
             return 0;
         }
         int perPage = 45;
         int startSlot = page * perPage;
         final String name = getDisplayName(itemId);
         final String header = "§6Filling page " + page + " (slots " + startSlot + "-" + (startSlot + perPage - 1) + ") with " + name;
-        src.sendFeedback(new LiteralText(header), false);
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text(header));
         long t0 = System.currentTimeMillis();
         int filled = 0;
         for (int s = startSlot; s < startSlot + perPage; s++) {
@@ -483,7 +482,7 @@ public class DebugCommand {
         }
         long ms = System.currentTimeMillis() - t0;
         final String msg = "§aFilled " + filled + "/" + perPage + " slots (" + ms + "ms)";
-        src.sendFeedback(new LiteralText(msg), false);
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text(msg));
         return 1;
     }
 
@@ -491,13 +490,13 @@ public class DebugCommand {
     private static int stressTest(ServerCommandSource src, String team, int total) {
         if (!checkDb(src)) return 0;
         final String header = "§6Starting stress test: adding " + total + " items to " + team + "...";
-        src.sendFeedback(new LiteralText(header), false);
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text(header));
         long t0 = System.currentTimeMillis();
         int added = 0;
         int idx = 0;
-        for (Item item : Registry.ITEM) {
+        for (Item item : MinecraftCompat.items()) {
             if (item == Items.AIR) continue;
-            String id = Registry.ITEM.getId(item).toString();
+            String id = MinecraftCompat.getItemId(item).toString();
             if (SharedBackpackMod.database.addItem(team, id, 1, null, "STRESS")) {
                 added++;
                 if (added >= total) break;
@@ -512,10 +511,10 @@ public class DebugCommand {
         final long m = ms;
         final String rate = ms > 0 ? String.valueOf(1000L * added / ms) : "?";
         final String msg = "§aAdded " + a + "/" + total + " items in " + m + "ms §7(" + rate + " items/sec)";
-        src.sendFeedback(new LiteralText(msg), false);
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text(msg));
         final int newTotal = SharedBackpackMod.database.getTotalItemCount(team);
         final String msg2 = "§7Total items now: " + newTotal;
-        src.sendFeedback(new LiteralText(msg2), false);
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text(msg2));
         return 1;
     }
 
@@ -541,29 +540,29 @@ public class DebugCommand {
         long ms = System.currentTimeMillis() - t0;
 
         final boolean consistent = (duplicateSlots == 0 && zeroCount == 0 && negativeCount == 0);
-        src.sendFeedback(new LiteralText(consistent ? "§a=== Integrity check PASSED ===" : "§c=== Integrity check FAILED ==="), false);
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text(consistent ? "§a=== Integrity check PASSED ===" : "§c=== Integrity check FAILED ==="));
         final String info = "§6Slots: §e" + items.size() + " | Total items: §e" + totalCount + " | Unique slots: §e" + seenSlots.size();
-        src.sendFeedback(new LiteralText(info), false);
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text(info));
         if (duplicateSlots > 0) {
             final int d = duplicateSlots;
-            src.sendFeedback(new LiteralText("§cDuplicate slots: " + d), false);
+            MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§cDuplicate slots: " + d));
         }
         if (zeroCount > 0) {
             final int z = zeroCount;
-            src.sendFeedback(new LiteralText("§6Zero-count entries: " + z), false);
+            MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§6Zero-count entries: " + z));
         }
         if (negativeCount > 0) {
             final int n = negativeCount;
-            src.sendFeedback(new LiteralText("§cNegative count entries: " + n), false);
+            MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§cNegative count entries: " + n));
         }
 
         int dbTotal = SharedBackpackMod.database.getTotalItemCount(team);
         final boolean sumOk = (totalCount == dbTotal);
         final int tc = totalCount;
         final int dt = dbTotal;
-        src.sendFeedback(new LiteralText(sumOk ? "§aSum check: OK (" + tc + " == " + dt + ")" : "§cSum check: MISMATCH (calc=" + tc + " vs db=" + dt + ")"), false);
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text(sumOk ? "§aSum check: OK (" + tc + " == " + dt + ")" : "§cSum check: MISMATCH (calc=" + tc + " vs db=" + dt + ")"));
         final String footer = "§7Verified in " + ms + "ms";
-        src.sendFeedback(new LiteralText(footer), false);
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text(footer));
         return 1;
     }
 
@@ -577,16 +576,16 @@ public class DebugCommand {
         }
         if (found == null) {
             final String msg = "§7Slot " + slot + " in " + team + " is empty";
-            src.sendFeedback(new LiteralText(msg), false);
+            MinecraftCompat.sendFeedback(src, MinecraftCompat.text(msg));
         } else {
             final String name = getDisplayName(found.itemId);
             final String line1 = "§6Slot " + slot + ": §e" + name + " §7x" + found.count;
-            src.sendFeedback(new LiteralText(line1), false);
+            MinecraftCompat.sendFeedback(src, MinecraftCompat.text(line1));
             final String nbtPreview = found.nbt != null ? found.nbt.substring(0, Math.min(100, found.nbt.length())) + "..." : "null";
             final String line2 = "§6NBT: §e" + nbtPreview;
-            src.sendFeedback(new LiteralText(line2), false);
+            MinecraftCompat.sendFeedback(src, MinecraftCompat.text(line2));
             final String line3 = "§6Placed by: §e" + found.placedBy + " @ " + found.placedTime;
-            src.sendFeedback(new LiteralText(line3), false);
+            MinecraftCompat.sendFeedback(src, MinecraftCompat.text(line3));
         }
         return 1;
     }
@@ -595,13 +594,13 @@ public class DebugCommand {
     private static int teamInfo(ServerCommandSource src, String team) {
         if (!checkDb(src)) return 0;
         String info = SharedBackpackMod.database.getBackpackInfo(team);
-        src.sendFeedback(new LiteralText("§6=== Team Info ==="), false);
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text("§6=== Team Info ==="));
         final String infoMsg = "§e" + info;
-        src.sendFeedback(new LiteralText(infoMsg), false);
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text(infoMsg));
 
         int pages = SharedBackpackMod.database.getMaxPages(team);
         final String header = "§6Per-page breakdown:";
-        src.sendFeedback(new LiteralText(header), false);
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text(header));
         for (int p = 0; p < pages; p++) {
             int ps = p * 45;
             int pe = ps + 45;
@@ -613,7 +612,7 @@ public class DebugCommand {
             final int pageIdx = p;
             final int usedCount = pi;
             final String line = "  §7Page " + pageIdx + ": §e" + usedCount + " slots used";
-            src.sendFeedback(new LiteralText(line), false);
+            MinecraftCompat.sendFeedback(src, MinecraftCompat.text(line));
         }
         return 1;
     }
@@ -623,12 +622,12 @@ public class DebugCommand {
         if (!checkDb(src)) return 0;
         List<DatabaseManager.BackpackItem> items = SharedBackpackMod.database.getItems(team);
         final String header = "§6=== All " + items.size() + " slots for " + team + " ===";
-        src.sendFeedback(new LiteralText(header), false);
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text(header));
         for (DatabaseManager.BackpackItem it : items) {
             final String name = getDisplayName(it.itemId);
             final String nbtFlag = it.nbt != null ? " §7[NBT]" : "";
             final String line = "§e[" + it.slot + "] §f" + name + " §7x" + it.count + nbtFlag + " §8by:" + it.placedBy;
-            src.sendFeedback(new LiteralText(line), false);
+            MinecraftCompat.sendFeedback(src, MinecraftCompat.text(line));
         }
         return 1;
     }
@@ -639,19 +638,19 @@ public class DebugCommand {
         boolean ok = SharedBackpackMod.database.removeItem(team, slot, 99999);
         if (ok) {
             final String msg = "§aSlot " + slot + " cleared in " + team;
-            src.sendFeedback(new LiteralText(msg), false);
+            MinecraftCompat.sendFeedback(src, MinecraftCompat.text(msg));
         } else {
             final String msg = "§7Slot " + slot + " was already empty";
-            src.sendFeedback(new LiteralText(msg), false);
+            MinecraftCompat.sendFeedback(src, MinecraftCompat.text(msg));
         }
         return 1;
     }
 
     // ===== 24. backup =====
     private static int forceBackup(ServerCommandSource src) {
-        File dbFile = new File(src.getMinecraftServer().getRunDirectory(), "config/sharedbackpack/backpack.db");
+        File dbFile = new File(MinecraftCompat.getServer(src).getRunDirectory(), "config/sharedbackpack/backpack.db");
         if (!dbFile.exists()) {
-            src.sendError(new LiteralText("§cDB file not found: " + dbFile.getAbsolutePath()));
+            src.sendError(MinecraftCompat.text("§cDB file not found: " + dbFile.getAbsolutePath()));
             return 0;
         }
         try {
@@ -663,9 +662,9 @@ public class DebugCommand {
             final String name = backup.getName();
             final long sizeKb = backup.length() / 1024;
             final String msg = "§aDebug backup created: " + name + " (" + sizeKb + " KB)";
-            src.sendFeedback(new LiteralText(msg), false);
+            MinecraftCompat.sendFeedback(src, MinecraftCompat.text(msg));
         } catch (Exception e) {
-            src.sendError(new LiteralText("§cBackup failed: " + e.getMessage()));
+            src.sendError(MinecraftCompat.text("§cBackup failed: " + e.getMessage()));
         }
         return 1;
     }
@@ -675,11 +674,11 @@ public class DebugCommand {
         if (SharedBackpackMod.database != null) {
             SharedBackpackMod.database.close();
         }
-        SharedBackpackMod.database = new DatabaseManager(src.getMinecraftServer());
+        SharedBackpackMod.database = new DatabaseManager(MinecraftCompat.getServer(src));
         SharedBackpackMod.database.init();
         boolean ok = SharedBackpackMod.database.isReady();
         final String msg = ok ? "§aDatabase reloaded successfully" : "§cDatabase reload FAILED";
-        src.sendFeedback(new LiteralText(msg), false);
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text(msg));
         return 1;
     }
 
@@ -696,21 +695,21 @@ public class DebugCommand {
         long ms = System.currentTimeMillis() - t0;
         final int c = cleared;
         final String msg = "§aCleared " + c + " slots from team " + team + " (" + ms + "ms)";
-        src.sendFeedback(new LiteralText(msg), false);
+        MinecraftCompat.sendFeedback(src, MinecraftCompat.text(msg));
         return 1;
     }
 
     // ===== Helpers =====
     private static boolean checkDb(ServerCommandSource src) {
         if (SharedBackpackMod.database == null || !SharedBackpackMod.database.isReady()) {
-            src.sendError(new LiteralText("§cDatabase not ready. Server still starting?"));
+            src.sendError(MinecraftCompat.text("§cDatabase not ready. Server still starting?"));
             return false;
         }
         return true;
     }
 
     private static String getDisplayName(String itemId) {
-        Item item = Registry.ITEM.get(new Identifier(itemId));
+        Item item = MinecraftCompat.getItem(new Identifier(itemId));
         if (item == null || item == Items.AIR) return itemId;
         String cn = ChineseNames.get(item.getTranslationKey());
         if (cn != null) return cn + " (" + itemId + ")";

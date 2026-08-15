@@ -1,8 +1,8 @@
 package com.sharedbackpack.backpack;
 
 import com.sharedbackpack.SharedBackpackMod;
+import com.sharedbackpack.compat.MinecraftCompat;
 import com.sharedbackpack.database.DatabaseManager;
-import net.minecraft.util.registry.Registry;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.util.Identifier;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -53,8 +53,8 @@ public class SharedBackpack {
     public static boolean addItem(ServerPlayerEntity player, ItemStack stack) {
         if (stack.isEmpty()) return false;
         String teamId = TeamResolver.resolvePrimaryTeam(player);
-        String itemId = Registry.ITEM.getId(stack.getItem()).toString();
-        String nbt = stack.hasTag() ? stripMetadata(stack.getTag().toString()) : null;
+        String itemId = MinecraftCompat.getItemId(stack.getItem()).toString();
+        String nbt = MinecraftCompat.hasNbt(stack) ? stripMetadata(MinecraftCompat.getNbt(stack).toString()) : null;
         return SharedBackpackMod.database.addItem(teamId, itemId, stack.getCount(), nbt, player.getEntityName());
     }
 
@@ -92,7 +92,7 @@ public class SharedBackpack {
     }
 
     public static ItemStack toItemStack(DatabaseManager.BackpackItem bpItem) {
-        Item item = Registry.ITEM.get(new Identifier(bpItem.itemId));
+        Item item = MinecraftCompat.getItem(new Identifier(bpItem.itemId));
         // Fallback to dirt if item not found (mod not loaded)
         if (item == null || item == Items.AIR) {
             item = Items.DIRT;
@@ -101,7 +101,7 @@ public class SharedBackpack {
         if (bpItem.nbt != null && !bpItem.nbt.isEmpty()) {
             try {
                 NbtCompound tag = net.minecraft.nbt.StringNbtReader.parse(bpItem.nbt);
-                stack.setTag(tag);
+                MinecraftCompat.setNbt(stack, tag);
             } catch (Exception ignored) {}
         }
         return stack;

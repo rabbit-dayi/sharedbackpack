@@ -4,10 +4,10 @@ import com.sharedbackpack.SharedBackpackMod;
 import com.sharedbackpack.backpack.SharedBackpack;
 import com.sharedbackpack.backpack.TeamResolver;
 import com.sharedbackpack.commands.PinyinSearch;
+import com.sharedbackpack.compat.MinecraftCompat;
 import com.sharedbackpack.database.DatabaseManager;
-import net.minecraft.util.registry.Registry;
 import net.minecraft.nbt.NbtCompound;
-import net.minecraft.text.LiteralText;
+import net.minecraft.text.Text;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.player.PlayerInventory;
@@ -23,7 +23,8 @@ import net.minecraft.item.Items;
 
 import java.util.*;
 
-public class BackpackMenu extends ScreenHandler {
+// Version-specific subclasses adapt ScreenHandler methods whose signatures changed after 1.16.
+abstract class BackpackMenuBase extends ScreenHandler {
     private static final int ITEMS_PER_PAGE = 45;
     private static final int GUI_SLOTS = 54;
     private static final int GUI_SLOTS_UNLOAD = 45;
@@ -36,7 +37,7 @@ public class BackpackMenu extends ScreenHandler {
 
     private final SimpleInventory handler;
     private final String teamId;
-    private final ServerPlayerEntity player;
+    protected final ServerPlayerEntity player;
     private final int maxPages;
     private final String searchFilter;
     private final boolean unloadMode;
@@ -54,8 +55,8 @@ public class BackpackMenu extends ScreenHandler {
     // slotTotalCount: gui slot index -> total stacked count (for stacked display)
     private final Map<Integer, Integer> slotTotalCount = new HashMap<>();
 
-    public BackpackMenu(int id, ServerPlayerEntity player, String teamId, int page, int maxPages,
-                        String searchFilter, boolean unloadMode, boolean isBox, String boxOwner) {
+    protected BackpackMenuBase(int id, ServerPlayerEntity player, String teamId, int page, int maxPages,
+                               String searchFilter, boolean unloadMode, boolean isBox, String boxOwner) {
         super(unloadMode ? ScreenHandlerType.GENERIC_9X5 : ScreenHandlerType.GENERIC_9X6, id);
         this.player = player; this.teamId = teamId; this.page = page; this.maxPages = maxPages;
         this.searchFilter = searchFilter; this.unloadMode = unloadMode;
@@ -70,8 +71,8 @@ public class BackpackMenu extends ScreenHandler {
         int invY = 18 + rows*18 + 13, hotbarY = invY + 3*18 + 4;
         for (int r = 0; r < 3; r++)
             for (int c = 0; c < 9; c++)
-                addSlot(new Slot(player.inventory, c+r*9+9, 8+c*18, invY+r*18));
-        for (int c = 0; c < 9; c++) addSlot(new Slot(player.inventory, c, 8+c*18, hotbarY));
+                addSlot(new Slot(MinecraftCompat.inventory(player), c+r*9+9, 8+c*18, invY+r*18));
+        for (int c = 0; c < 9; c++) addSlot(new Slot(MinecraftCompat.inventory(player), c, 8+c*18, hotbarY));
         loadPage();
     }
 
@@ -125,19 +126,19 @@ public class BackpackMenu extends ScreenHandler {
     private int invEnd()   { return unloadMode ? INV_END_UNLOAD : INV_END_NORMAL; }
 
     static void stripDisplay(ItemStack stack) {
-        NbtCompound t = stack.getTag(); if (t == null) return;
+        NbtCompound t = MinecraftCompat.getNbt(stack); if (t == null) return;
         boolean d = false;
         if (t.contains("display")) { NbtCompound dp = t.getCompound("display");
             if (dp.contains("Lore")) { dp.remove("Lore"); d = true; }
             if (dp.contains("Name")) { dp.remove("Name"); d = true; }
             if (dp.isEmpty()) { t.remove("display"); d = true; } }
-        if (d && t.isEmpty()) stack.setTag(null);
+        if (d && t.isEmpty()) MinecraftCompat.setNbt(stack, null);
     }
 
     // Strip display metadata (Name + Lore) from item NBT for DB storage
     static String nbtForStorage(ItemStack stack) {
-        if (!stack.hasTag()) return null;
-        NbtCompound copy = stack.getTag().copy();
+        if (!MinecraftCompat.hasNbt(stack)) return null;
+        NbtCompound copy = MinecraftCompat.getNbt(stack).copy();
         if (copy.contains("display")) {
             NbtCompound dp = copy.getCompound("display");
             dp.remove("Name"); dp.remove("Lore");
@@ -148,7 +149,7 @@ public class BackpackMenu extends ScreenHandler {
 
     static void setMeta(ItemStack stack, DatabaseManager.BackpackItem item) {
         if (item.placedBy == null) return;
-        NbtCompound tag = stack.getOrCreateTag();
+        NbtCompound tag = MinecraftCompat.getOrCreateNbt(stack);
         NbtCompound display = tag.contains("display") ? tag.getCompound("display") : new NbtCompound();
         net.minecraft.nbt.NbtList lore = new net.minecraft.nbt.NbtList();
         lore.add(loreLine("\u00a78\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"));
@@ -295,7 +296,7 @@ public class BackpackMenu extends ScreenHandler {
     }
 
     static void setStackedCountLore(ItemStack stack, int total) {
-        NbtCompound tag = stack.getOrCreateTag();
+        NbtCompound tag = MinecraftCompat.getOrCreateNbt(stack);
         NbtCompound display = tag.contains("display") ? tag.getCompound("display") : new NbtCompound();
         // Prepend stacked count, keep existing lore (meta info) below
         net.minecraft.nbt.NbtList existing = display.contains("Lore") ? display.getList("Lore", 8) : new net.minecraft.nbt.NbtList();
@@ -308,35 +309,35 @@ public class BackpackMenu extends ScreenHandler {
 
     private void populateControlBar(int loaded) {
         if (page > 0) {
-            ItemStack p = new ItemStack(Items.ARROW); p.setCustomName(new LiteralText("\u00a76\u25c0 \u4e0a\u4e00\u9875"));
+            ItemStack p = new ItemStack(Items.ARROW); p.setCustomName(MinecraftCompat.text("\u00a76\u25c0 \u4e0a\u4e00\u9875"));
             handler.setStack(PREV_SLOT, p);
         }
         ItemStack pi = new ItemStack(Items.PAPER);
-        pi.setCustomName(new LiteralText("\u00a7e\u7b2c " + (page+1) + " / " + viewMaxPages + " \u9875"));
+        pi.setCustomName(MinecraftCompat.text("\u00a7e\u7b2c " + (page+1) + " / " + viewMaxPages + " \u9875"));
         handler.setStack(PAGE_SLOT, pi);
         ItemStack ci = new ItemStack(Items.BOOK);
-        ci.setCustomName(new LiteralText("\u00a7e\u7269\u54c1: " + dbTotal() + " \u4ef6"));
+        ci.setCustomName(MinecraftCompat.text("\u00a7e\u7269\u54c1: " + dbTotal() + " \u4ef6"));
         handler.setStack(COUNT_SLOT, ci);
 
         String dn = teamId;
         if (isBox && teamId.contains(":")) dn = teamId.substring(teamId.lastIndexOf(':')+1);
         ItemStack ti = new ItemStack(isBox ? Items.CHEST : Items.NAME_TAG);
-        ti.setCustomName(new LiteralText("\u00a7a" + (isBox ? "\u76d2\u5b50:"+dn+" \u00a77(\u70b9\u51fb\u8fd4\u56de\u961f\u4f0d)" : "\u961f\u4f0d: "+dn+" \u00a77(\u70b9\u51fb\u7ba1\u7406\u76d2\u5b50)")));
+        ti.setCustomName(MinecraftCompat.text("\u00a7a" + (isBox ? "\u76d2\u5b50:"+dn+" \u00a77(\u70b9\u51fb\u8fd4\u56de\u961f\u4f0d)" : "\u961f\u4f0d: "+dn+" \u00a77(\u70b9\u51fb\u7ba1\u7406\u76d2\u5b50)")));
         handler.setStack(TEAM_SLOT, ti);
 
         if (currentMenu instanceof ModMenuPage) {
-            ItemStack bk = new ItemStack(Items.BARRIER); bk.setCustomName(new LiteralText("\u00a7c\u8fd4\u56de\u5168\u90e8"));
+            ItemStack bk = new ItemStack(Items.BARRIER); bk.setCustomName(MinecraftCompat.text("\u00a7c\u8fd4\u56de\u5168\u90e8"));
             handler.setStack(MOD_SLOT, bk);
         } else if (currentMenu instanceof BoxMenuPage) {
-            ItemStack bk = new ItemStack(Items.BARRIER); bk.setCustomName(new LiteralText("\u00a7c\u8fd4\u56de\u80cc\u5305"));
+            ItemStack bk = new ItemStack(Items.BARRIER); bk.setCustomName(MinecraftCompat.text("\u00a7c\u8fd4\u56de\u80cc\u5305"));
             handler.setStack(MOD_SLOT, bk);
         } else if (modFilter != null) {
             ItemStack ic = getModIcon(modFilter);
-            ic.setCustomName(new LiteralText("\u00a76\u5206\u7c7b: " + modFilter + " \u00a77(\u70b9\u51fb\u5c55\u5f00\u83dc\u5355)"));
+            ic.setCustomName(MinecraftCompat.text("\u00a76\u5206\u7c7b: " + modFilter + " \u00a77(\u70b9\u51fb\u5c55\u5f00\u83dc\u5355)"));
             handler.setStack(MOD_SLOT, ic);
         } else {
             ItemStack am = new ItemStack(Items.BOOKSHELF);
-            am.setCustomName(new LiteralText("\u00a76\u5206\u7c7b: \u5168\u90e8 \u00a77(\u70b9\u51fb\u5c55\u5f00\u83dc\u5355)"));
+            am.setCustomName(MinecraftCompat.text("\u00a76\u5206\u7c7b: \u5168\u90e8 \u00a77(\u70b9\u51fb\u5c55\u5f00\u83dc\u5355)"));
             handler.setStack(MOD_SLOT, am);
         }
 
@@ -346,22 +347,22 @@ public class BackpackMenu extends ScreenHandler {
         if (searchFilter != null && !searchFilter.isEmpty()) {
             ItemStack si = new ItemStack(Items.COMPASS);
             String suf = displaySort != 0 ? " \u00a77[" + sortLabels[displaySort] + "\u00a77]" : "";
-            si.setCustomName(new LiteralText("\u00a7d\u641c\u7d22: " + searchFilter + suf + " \u00a78(\u70b9\u51fb\u5207\u6362\u6392\u5e8f)"));
+            si.setCustomName(MinecraftCompat.text("\u00a7d\u641c\u7d22: " + searchFilter + suf + " \u00a78(\u70b9\u51fb\u5207\u6362\u6392\u5e8f)"));
             handler.setStack(SEARCH_SLOT, si);
         } else {
             ItemStack si = new ItemStack(sortIcons[displaySort]);
-            si.setCustomName(new LiteralText(sortLabels[displaySort] + " \u00a77(\u70b9\u51fb\u5207\u6362)"));
+            si.setCustomName(MinecraftCompat.text(sortLabels[displaySort] + " \u00a77(\u70b9\u51fb\u5207\u6362)"));
             handler.setStack(SEARCH_SLOT, si);
         }
         ItemStack sb = new ItemStack(Items.HOPPER);
-        sb.setCustomName(new LiteralText("\u00a76\u6574\u7406\u7269\u54c1 \u00a77(\u5de6\u952e=\u5168\u90e8 \u53f3\u952e=\u5f53\u524d\u9875)"));
+        sb.setCustomName(MinecraftCompat.text("\u00a76\u6574\u7406\u7269\u54c1 \u00a77(\u5de6\u952e=\u5168\u90e8 \u53f3\u952e=\u5f53\u524d\u9875)"));
         handler.setStack(SORT_SLOT, sb);
         ItemStack ug = new ItemStack(Items.DIAMOND);
-        ug.setCustomName(new LiteralText("\u00a7b\u5347\u7ea7\u80cc\u5305 [+1\u9875] \u00a77\u9700\u8981 1 \u94bb\u77f3"));
+        ug.setCustomName(MinecraftCompat.text("\u00a7b\u5347\u7ea7\u80cc\u5305 [+1\u9875] \u00a77\u9700\u8981 1 \u94bb\u77f3"));
         handler.setStack(UPGRADE_SLOT, ug);
         if (page < viewMaxPages - 1) {
             ItemStack nx = new ItemStack(Items.ARROW);
-            nx.setCustomName(new LiteralText("\u00a76\u4e0b\u4e00\u9875 \u25b6"));
+            nx.setCustomName(MinecraftCompat.text("\u00a76\u4e0b\u4e00\u9875 \u25b6"));
             handler.setStack(NEXT_SLOT, nx);
         }
     }
@@ -379,7 +380,7 @@ public class BackpackMenu extends ScreenHandler {
     private void cycleSortMode() { displaySort = (displaySort + 1) % 5; PLAYER_SORT_PREF.put(player.getUuidAsString(), displaySort); page = 0; refreshPage(); }
 
     private void stashCarried() {
-        ItemStack c = player.inventory.getCursorStack(); if (c.isEmpty()) return;
+        ItemStack c = getCursorStackCompat(); if (c.isEmpty()) return;
         int ms = unloadMode ? GUI_SLOTS_UNLOAD : ITEMS_PER_PAGE;
         for (int i = 0; i < ms && !c.isEmpty(); i++) {
             Slot s = getSlot(i); if (s == null || !s.hasStack()) continue;
@@ -393,8 +394,8 @@ public class BackpackMenu extends ScreenHandler {
             int tp = Math.min(c.getCount(), 64);
             ItemStack cp = c.copy(); cp.setCount(tp); c.decrement(tp); s.setStack(cp);
         }
-        if (!c.isEmpty() && !player.inventory.insertStack(c)) player.dropItem(c, false);
-        player.inventory.setCursorStack(ItemStack.EMPTY);
+        if (!c.isEmpty() && !MinecraftCompat.inventory(player).insertStack(c)) player.dropItem(c, false);
+        setCursorStackCompat(ItemStack.EMPTY);
     }
 
     private void toggleModMenu() {
@@ -410,67 +411,74 @@ public class BackpackMenu extends ScreenHandler {
 
     // ===== Click handling =====
 
-    @Override
-    public ItemStack onSlotClick(int slotId, int button, SlotActionType clickType, PlayerEntity clickPlayer) {
+    protected boolean handleSlotClick(int slotId, int button, SlotActionType clickType, PlayerEntity clickPlayer) {
         if (currentMenu != null && slotId >= 0 && slotId < ITEMS_PER_PAGE) {
             currentMenu.onClick(slotId, this);
-            return ItemStack.EMPTY;
+            return true;
         }
 
         if (!unloadMode && slotId >= 0 && slotId < GUI_SLOTS && isControlSlot(slotId)) {
-            if (inMenu() && slotId == MOD_SLOT) { stashCarried(); currentMenu = null; refreshPage(); return ItemStack.EMPTY; }
+            if (inMenu() && slotId == MOD_SLOT) { stashCarried(); currentMenu = null; refreshPage(); return true; }
             if (!inMenu()) {
-                if (slotId == PREV_SLOT && page > 0) { navigateToPage(page-1); return ItemStack.EMPTY; }
-                if (slotId == NEXT_SLOT && page < viewMaxPages-1) { navigateToPage(page+1); return ItemStack.EMPTY; }
-                if (slotId == SEARCH_SLOT) { cycleSortMode(); return ItemStack.EMPTY; }
-                if (slotId == UPGRADE_SLOT) { doUpgrade(); return ItemStack.EMPTY; }
-                if (slotId == SORT_SLOT) { handleSort(button); return ItemStack.EMPTY; }
-                if (slotId == MOD_SLOT) { toggleModMenu(); return ItemStack.EMPTY; }
+                if (slotId == PREV_SLOT && page > 0) { navigateToPage(page-1); return true; }
+                if (slotId == NEXT_SLOT && page < viewMaxPages-1) { navigateToPage(page+1); return true; }
+                if (slotId == SEARCH_SLOT) { cycleSortMode(); return true; }
+                if (slotId == UPGRADE_SLOT) { doUpgrade(); return true; }
+                if (slotId == SORT_SLOT) { handleSort(button); return true; }
+                if (slotId == MOD_SLOT) { toggleModMenu(); return true; }
                 if (slotId == TEAM_SLOT && isBox) {
-                    stashCarried(); player.server.execute(() -> openTeam(player, searchFilter)); return ItemStack.EMPTY;
+                    stashCarried(); player.server.execute(() -> openTeam(player, searchFilter)); return true;
                 }
-                if (slotId == TEAM_SLOT && !isBox) { toggleBoxMenu(); return ItemStack.EMPTY; }
+                if (slotId == TEAM_SLOT && !isBox) { toggleBoxMenu(); return true; }
             }
-            return ItemStack.EMPTY;
+            return true;
         }
 
         int max = (unloadMode||inMenu())?GUI_SLOTS_UNLOAD:ITEMS_PER_PAGE;
         if (slotId >= 0 && slotId < max && clickType == SlotActionType.PICKUP) {
             Slot s = getSlot(slotId);
-            ItemStack cur = player.inventory.getCursorStack();
+            ItemStack cur = getCursorStackCompat();
             // In menu view (mod/box picker), item slots are UI - no interaction
-            if (isMenuView()) return ItemStack.EMPTY;
+            if (isMenuView()) return true;
             if (s != null && s.hasStack() && s.canTakeItems(clickPlayer)) {
                 if (button == 0 && cur.isEmpty()) {
                     ItemStack ex = s.takeStack(1);
                     if (!ex.isEmpty()) {
-                        s.onTakeItem(clickPlayer, ex);
-                        player.inventory.setCursorStack(ex);
+                        afterTake(slotId, ex);
+                        setCursorStackCompat(ex);
                     }
-                    return ItemStack.EMPTY;
+                    return true;
                 }
                 if (button == 1 && cur.isEmpty()) {
                     int mx = s.getStack().getMaxCount();
                     ItemStack ex = s.takeStack(mx);
                     if (!ex.isEmpty()) {
-                        s.onTakeItem(clickPlayer, ex);
-                        player.inventory.setCursorStack(ex);
+                        afterTake(slotId, ex);
+                        setCursorStackCompat(ex);
                     }
-                    return ItemStack.EMPTY;
+                    return true;
                 }
             }
             // Placing carried item: in alt view (search/mod-filter), use dbAdd instead of slot-based set
             if (!cur.isEmpty() && isAltView()) {
-                String iid = Registry.ITEM.getId(cur.getItem()).toString();
+                String iid = MinecraftCompat.getItemId(cur.getItem()).toString();
                 String nbt = nbtForStorage(cur);
                 if (dbAdd(iid, cur.getCount(), nbt, player.getEntityName())) {
-                    player.inventory.setCursorStack(ItemStack.EMPTY);
+                    setCursorStackCompat(ItemStack.EMPTY);
                     refreshPage();
                 }
-                return ItemStack.EMPTY;
+                return true;
             }
         }
-        return super.onSlotClick(slotId, button, clickType, clickPlayer);
+        return false;
+    }
+
+    private void afterTake(int slotId, ItemStack stack) {
+        if (!isControlSlot(slotId)) {
+            stripDisplay(stack);
+            stack.removeCustomName();
+            dbRemove(realDbSlot(slotId), stack.getCount());
+        }
     }
 
     private void handleSort(int button) {
@@ -478,27 +486,27 @@ public class BackpackMenu extends ScreenHandler {
             long now = System.currentTimeMillis();
             sortClicks[sortClickIdx%3] = now; sortClickIdx++;
             boolean t3 = sortClickIdx >= 3 && (now - sortClicks[(sortClickIdx-3)%3]) < 1500;
-            if (t3) { dbSortAll(); player.sendMessage(new LiteralText("\u00a7a\u5168\u80cc\u5305\u5df2\u6574\u7406\uff01"), false); }
-            else { dbSortPage(page); player.sendMessage(new LiteralText("\u00a7a\u5f53\u524d\u9875\u5df2\u6574\u7406\uff01"), false); }
+            if (t3) { dbSortAll(); player.sendMessage(MinecraftCompat.text("\u00a7a\u5168\u80cc\u5305\u5df2\u6574\u7406\uff01"), false); }
+            else { dbSortPage(page); player.sendMessage(MinecraftCompat.text("\u00a7a\u5f53\u524d\u9875\u5df2\u6574\u7406\uff01"), false); }
         } else {
             dbSortAll();
-            player.sendMessage(new LiteralText("\u00a7a\u7269\u54c1\u5df2\u6574\u7406\uff01"), false);
+            player.sendMessage(MinecraftCompat.text("\u00a7a\u7269\u54c1\u5df2\u6574\u7406\uff01"), false);
         }
         refreshPage();
     }
 
     private void doUpgrade() {
-        for (int i = 0; i < player.inventory.size(); i++) {
-            ItemStack s = player.inventory.getStack(i);
+        for (int i = 0; i < MinecraftCompat.inventory(player).size(); i++) {
+            ItemStack s = MinecraftCompat.inventory(player).getStack(i);
             if (s.getItem()==Items.DIAMOND && s.getCount()>=1) {
                 s.decrement(1); dbUpgrade();
-                player.sendMessage(new LiteralText("\u00a7a\u80cc\u5305\u5df2\u5347\u7ea7\uff01"), false);
+                player.sendMessage(MinecraftCompat.text("\u00a7a\u80cc\u5305\u5df2\u5347\u7ea7\uff01"), false);
                 stashCarried();
                 player.server.execute(() -> openForPlayer(player, searchFilter, page, false, isBox, boxOwner));
                 return;
             }
         }
-        player.sendMessage(new LiteralText("\u00a7c\u9700\u8981 1 \u4e2a\u94bb\u77f3\u6765\u5347\u7ea7\u80cc\u5305\uff01"), false);
+        player.sendMessage(MinecraftCompat.text("\u00a7c\u9700\u8981 1 \u4e2a\u94bb\u77f3\u6765\u5347\u7ea7\u80cc\u5305\uff01"), false);
     }
 
     private void doCreateBox() {
@@ -507,7 +515,7 @@ public class BackpackMenu extends ScreenHandler {
         int n = exist.size()+1; String name;
         do { name = "\u76d2\u5b50" + n; n++; } while (exist.contains(name));
         SharedBackpackMod.database.createBox(owner, name);
-        player.sendMessage(new LiteralText("\u00a7a\u5df2\u521b\u5efa\u76d2\u5b50: " + name), false);
+        player.sendMessage(MinecraftCompat.text("\u00a7a\u5df2\u521b\u5efa\u76d2\u5b50: " + name), false);
         currentMenu = null; stashCarried();
         String fn = name, fo = owner;
         player.server.execute(() -> openForPlayer(player, searchFilter, 0, false, true, fo+":"+fn));
@@ -517,15 +525,14 @@ public class BackpackMenu extends ScreenHandler {
 
     static boolean tagsMatchIgnore(ItemStack a, ItemStack b) {
         if (a.getItem() != b.getItem()) return false;
-        NbtCompound t1 = a.hasTag()?a.getTag().copy():null;
+        NbtCompound t1 = MinecraftCompat.hasNbt(a) ? MinecraftCompat.getNbt(a).copy() : null;
         if (t1!=null){t1.remove("display");if(t1.isEmpty())t1=null;}
-        NbtCompound t2 = b.hasTag()?b.getTag().copy():null;
+        NbtCompound t2 = MinecraftCompat.hasNbt(b) ? MinecraftCompat.getNbt(b).copy() : null;
         if (t2!=null){t2.remove("display");if(t2.isEmpty())t2=null;}
         return (t1==null&&t2==null)||(t1!=null&&t1.equals(t2));
     }
 
-    @Override
-    public ItemStack transferSlot(PlayerEntity mp, int index) {
+    protected ItemStack quickMoveInternal(PlayerEntity mp, int index) {
         Slot s = getSlot(index);
         if (s == null || !s.hasStack()) return ItemStack.EMPTY;
         if (!unloadMode && !inMenu() && isControlSlot(index)) return ItemStack.EMPTY;
@@ -554,7 +561,7 @@ public class BackpackMenu extends ScreenHandler {
             }
         } else {
             // Shift-click from player inventory -> backpack (works in all views)
-            String iid = Registry.ITEM.getId(src.getItem()).toString();
+            String iid = MinecraftCompat.getItemId(src.getItem()).toString();
             String nbt = nbtForStorage(src);
             boolean added = dbAdd(iid, src.getCount(), nbt, player.getEntityName());
             if (!added) return ItemStack.EMPTY;
@@ -572,6 +579,10 @@ public class BackpackMenu extends ScreenHandler {
         refreshPage();
         return orig;
     }
+
+    protected abstract ItemStack getCursorStackCompat();
+
+    protected abstract void setCursorStackCompat(ItemStack stack);
 
     @Override public boolean canUse(PlayerEntity p) { return true; }
 
@@ -610,7 +621,7 @@ public class BackpackMenu extends ScreenHandler {
             public ScreenHandler createMenu(int id, PlayerInventory inv, PlayerEntity p) {
                 return new BackpackMenu(id, player, menuId, fp, menuPages, search, fw, fb, fo);
             }
-            public LiteralText getDisplayName() { return new LiteralText(ft); }
+            public Text getDisplayName() { return MinecraftCompat.text(ft); }
         });
     }
 
@@ -618,7 +629,7 @@ public class BackpackMenu extends ScreenHandler {
 
     interface MenuPage {
         void populate(SimpleInventory handler, int maxSlots);
-        String onClick(int slotId, BackpackMenu menu);
+        String onClick(int slotId, BackpackMenuBase menu);
     }
 
     class ModMenuPage implements MenuPage {
@@ -633,11 +644,11 @@ public class BackpackMenu extends ScreenHandler {
                 if (i >= max) break;
                 ItemStack icon = SharedBackpack.toItemStack(e.getValue());
                 long cnt = all.stream().filter(it -> (it.itemId.contains(":")?it.itemId.split(":",2)[0]:"minecraft").equals(e.getKey())).mapToInt(it -> it.count).sum();
-                icon.setCustomName(new LiteralText("\u00a76"+e.getKey()+" \u00a77("+cnt+" \u4ef6)"));
+                icon.setCustomName(MinecraftCompat.text("\u00a76"+e.getKey()+" \u00a77("+cnt+" \u4ef6)"));
                 map.put(i, e.getKey()); h.setStack(i++, icon);
             }
         }
-        public String onClick(int slotId, BackpackMenu m) {
+        public String onClick(int slotId, BackpackMenuBase m) {
             String ns = map.get(slotId); if (ns == null) return null;
             m.modFilter = ns; m.currentMenu = null; m.page = 0; m.refreshPage(); return "FILTER";
         }
@@ -652,16 +663,16 @@ public class BackpackMenu extends ScreenHandler {
             for (String name : list) {
                 if (i >= max-1) break;
                 ItemStack icon = new ItemStack(Items.CHEST);
-                icon.setCustomName(new LiteralText("\u00a76"+name));
+                icon.setCustomName(MinecraftCompat.text("\u00a76"+name));
                 map.put(i, name); h.setStack(i++, icon);
             }
             if (i < max) {
                 ItemStack nb = new ItemStack(Items.CRAFTING_TABLE);
-                nb.setCustomName(new LiteralText("\u00a7a+ \u65b0\u5efa\u76d2\u5b50"));
+                nb.setCustomName(MinecraftCompat.text("\u00a7a+ \u65b0\u5efa\u76d2\u5b50"));
                 map.put(i, "__new__"); h.setStack(i, nb);
             }
         }
-        public String onClick(int slotId, BackpackMenu m) {
+        public String onClick(int slotId, BackpackMenuBase m) {
             String name = map.get(slotId); if (name == null) return null;
             if ("__new__".equals(name)) { m.doCreateBox(); return "CREATE"; }
             String team = TeamResolver.resolvePrimaryTeam(player);
@@ -678,14 +689,10 @@ public class BackpackMenu extends ScreenHandler {
         BpSlot(int ls, int x, int y) { super(handler, ls, x, y); this.ls = ls; }
         public boolean canTakeItems(PlayerEntity p) { return !isControlSlot(ls); }
         public boolean canInsert(ItemStack s) { return !isControlSlot(ls) && !isMenuView(); }
-        public ItemStack onTakeItem(PlayerEntity t, ItemStack s) {
-            if (!isControlSlot(ls)) { stripDisplay(s); s.removeCustomName(); dbRemove(realDbSlot(ls), s.getCount()); }
-            return super.onTakeItem(t, s);
-        }
         public void setStack(ItemStack s) {
             if (!isControlSlot(ls)) {
                 if (!s.isEmpty()) {
-                    String iid = Registry.ITEM.getId(s.getItem()).toString();
+                    String iid = MinecraftCompat.getItemId(s.getItem()).toString();
                     String n = nbtForStorage(s);
                     dbSet(realDbSlot(ls), iid, s.getCount(), n, player.getEntityName());
                 } else { dbRemove(realDbSlot(ls), 99999); }

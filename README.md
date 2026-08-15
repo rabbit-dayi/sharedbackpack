@@ -1,14 +1,14 @@
 # Shared Backpack / 共享背包
 
-[![Fabric](https://img.shields.io/badge/Fabric-1.16.5-blue)](https://fabricmc.net/)
-[![Java](https://img.shields.io/badge/Java-8%2B-blue)](https://adoptium.net/)
+[![Fabric](https://img.shields.io/badge/Fabric-1.16.5%20%7C%201.20.1-blue)](https://fabricmc.net/)
+[![Java](https://img.shields.io/badge/Java-8%2B%20%7C%2017%2B-blue)](https://adoptium.net/)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
 ![Screenshot](docs/screenshot.png)
 
-A server-only Minecraft Fabric mod for 1.16.5, providing a team-shared backpack with SQLite storage, fuzzy Chinese pinyin search, and player-customizable boxes.
+A server-only Minecraft Fabric mod for 1.16.5 and 1.20.1, providing a team-shared backpack with SQLite storage, fuzzy Chinese pinyin search, and player-customizable boxes.
 
-服务端 only 的 Minecraft Fabric 1.16.5 模组，提供基于 SQLite 的团队共享背包，支持模糊拼音搜索和玩家自定义盒子。
+服务端 only 的 Minecraft Fabric 模组，支持 1.16.5 与 1.20.1，提供基于 SQLite 的团队共享背包，支持模糊拼音搜索和玩家自定义盒子。
 
 ---
 
@@ -64,22 +64,23 @@ Bottom row (slots 45-53) is the control bar:
 
 ```bash
 cd sharedbackpack
-./gradlew build
-# Output: build/libs/sharedbackpack-1.16.5-1.5.7.jar
+./gradlew build -PmcVersion=1.16.5
+# Output: build/libs/sharedbackpack-fabric-1.16.5-1.5.8.jar
+
+./gradlew build -PmcVersion=1.20.1
+# Output: build/libs/sharedbackpack-fabric-1.20.1-1.5.8.jar
 ```
 
 ### Dependencies / 依赖
 
-- [Minecraft Fabric Loader 0.14.25+](https://fabricmc.net/use/)
-- [Fabric API 0.42.0+1.16](https://modrinth.com/mod/fabric-api/version/0.42.0+1.16)
-- Minecraft 1.16.5
-- Java 8+
+- Minecraft 1.16.5: Fabric Loader 0.14.25+, Fabric API 0.42.0+1.16, Java 8+
+- Minecraft 1.20.1: Fabric Loader 0.16.10+, Fabric API 0.92.11+1.20.1, Java 17+
 - [SQLite JDBC 3.45.1.0](https://github.com/xerial/sqlite-jdbc)
 - [PinIn 1.6.0](https://github.com/Towdium/PinIn) — Chinese pinyin matching
 
 ### Deploy / 部署
 
-Install Fabric Loader and Fabric API on the Minecraft 1.16.5 server, then copy `sharedbackpack-1.16.5-1.5.7.jar` to the server's `mods/` folder. Stop the server before deploying.
+Install the matching Fabric Loader and Fabric API on the server, then copy the JAR whose Minecraft version exactly matches the server to its `mods/` folder. Stop the server before deploying. The 1.16.5 and 1.20.1 JARs are separate and must not be mixed.
 
 ## License / 许可证
 
