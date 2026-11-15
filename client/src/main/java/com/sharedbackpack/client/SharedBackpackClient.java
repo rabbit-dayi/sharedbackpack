@@ -21,6 +21,7 @@ public final class SharedBackpackClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         ClientDiagnostics.register();
+        DashboardClient.register();
         KeyBinding open = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.sharedbackpack.open", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_B, "category.sharedbackpack"));
         ClientPlayNetworking.registerGlobalReceiver(BackpackProtocol.STATE, (client, handler, buf, sender) -> {
@@ -51,10 +52,12 @@ public final class SharedBackpackClient implements ClientModInitializer {
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> ClientDiagnostics.reset());
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             clearScreen();
+            DashboardClient.clear();
             ClientDiagnostics.reset();
         });
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             ClientDiagnostics.tick();
+            DashboardClient.tick(client);
             if (client.currentScreen instanceof BackpackScreenExtension) {
                 ((BackpackScreenExtension) client.currentScreen).sharedbackpack$tickSearch();
             }

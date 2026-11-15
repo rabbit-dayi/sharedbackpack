@@ -57,7 +57,7 @@ final class ServerDiagnostics {
                 return;
             }
             server.execute(() -> {
-                if (!(player.currentScreenHandler instanceof BackpackMenu)
+                if (!(player.currentScreenHandler instanceof BackpackMenu || player.currentScreenHandler instanceof DashboardMenuBase)
                         || player.currentScreenHandler.syncId != syncId || !player.isAlive()
                         || !ServerPlayNetworking.canSend(player, BackpackProtocol.STATUS)) return;
                 long now = System.nanoTime();

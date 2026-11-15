@@ -1,6 +1,9 @@
 package com.sharedbackpack.database;
 
 import com.sharedbackpack.SharedBackpackMod;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.StringNbtReader;
 import net.minecraft.server.MinecraftServer;
 
 import java.io.File;
@@ -19,7 +22,10 @@ public class DatabaseManager {
     private static final int SLOTS_PER_PAGE = 45;
 
     public DatabaseManager(MinecraftServer server) {
-        File modDir = new File(server.getRunDirectory(), "config/sharedbackpack");
+        this(new File(server.getRunDirectory(), "config/sharedbackpack"));
+    }
+
+    DatabaseManager(File modDir) {
         modDir.mkdirs();
         this.dbFile = new File(modDir, "backpack.db");
         this.backupDir = new File(modDir, "backups");
@@ -107,6 +113,10 @@ public class DatabaseManager {
             // Player binds (persistent across restarts)
             stmt.execute("CREATE TABLE IF NOT EXISTS player_binds ("
                     + "player_uuid TEXT PRIMARY KEY, item_id TEXT NOT NULL, box_target TEXT)");
+            stmt.execute("CREATE TABLE IF NOT EXISTS storage_view_preferences ("
+                    + "player_uuid TEXT NOT NULL, storage_owner TEXT NOT NULL, storage_type INTEGER NOT NULL, "
+                    + "box_name TEXT NOT NULL, page INTEGER NOT NULL DEFAULT 0, sort INTEGER NOT NULL DEFAULT 0, "
+                    + "PRIMARY KEY(player_uuid, storage_owner, storage_type, box_name))");
         }
     }
 
@@ -145,79 +155,214 @@ public class DatabaseManager {
     }
 
     public synchronized boolean addItem(String teamId, String itemId, int count, String nbt, String playerName) {
-        if (!isReady()) return false;
-        int maxPages = getMaxPages(teamId);
-        int maxSlots = maxPages * SLOTS_PER_PAGE;
-        String now = LocalDateTime.now(java.time.ZoneId.of("Asia/Shanghai"))
-                .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        return depositAtomic(teamId, null, itemId, count, nbt, playerName);
+    }
 
+    public synchronized boolean depositAtomic(String owner, String box, String itemId, int count,
+                                              String nbt, String playerName) {
+        if (!isReady() || owner == null || itemId == null || count <= 0) return false;
+        boolean transactionStarted = false;
+        boolean committed = false;
         try {
-            // First try to stack with existing slot (STRICT: must match item_id AND nbt exactly)
-            String findSql = "SELECT slot, count, placed_count FROM backpack_items WHERE team_id = ? AND item_id = ? AND ";
-            if (nbt != null) {
-                findSql += "nbt = ?";
-            } else {
-                findSql += "(nbt IS NULL OR nbt = '')";
+            if (!connection.getAutoCommit()) return false;
+            connection.setAutoCommit(false);
+            transactionStarted = true;
+            String table = box == null ? "backpack_items" : "player_box_items";
+            String scope = box == null ? "team_id=?" : "owner_uuid=? AND box_name=?";
+            String metaTable = box == null ? "backpack_meta" : "player_box_meta";
+            int maxPages = 1;
+            try (PreparedStatement ps = connection.prepareStatement(
+                    "SELECT max_pages FROM " + metaTable + " WHERE " + scope)) {
+                bindStorage(ps, 1, owner, box);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) maxPages = rs.getInt(1);
+                }
             }
-
-            try (PreparedStatement ps = connection.prepareStatement(findSql)) {
-                ps.setString(1, teamId);
-                ps.setString(2, itemId);
-                if (nbt != null) ps.setString(3, nbt);
-
-                ResultSet rs = ps.executeQuery();
-                while (rs.next()) {
-                    int slot = rs.getInt("slot");
-                    int existing = rs.getInt("count");
-                    if (existing < 64) {
-                        int canAdd = Math.min(count, 64 - existing);
-                        int newPlacedCount = (int) Math.min((long)rs.getInt("placed_count") + canAdd, 999_999_999L);
-                        String updSql = "UPDATE backpack_items SET count = count + ?, placed_count = ?, last_modified_by = ?, last_modified_time = ? WHERE team_id = ? AND slot = ?";
-                        try (PreparedStatement upd = connection.prepareStatement(updSql)) {
-                            upd.setInt(1, canAdd);
-                            upd.setInt(2, newPlacedCount);
-                            upd.setString(3, playerName);
-                            upd.setString(4, now);
-                            upd.setString(5, teamId);
-                            upd.setInt(6, slot);
-                            upd.executeUpdate();
-                        }
-                        count -= canAdd;
-                        if (count <= 0) {
-                            updateTimestamp(teamId);
-                            return true;
+            int maxSlots = (int) Math.min(Integer.MAX_VALUE, Math.max(0L, (long) maxPages * SLOTS_PER_PAGE));
+            Set<Integer> used = new HashSet<>();
+            List<int[]> stacks = new ArrayList<>();
+            long available = 0;
+            try (PreparedStatement ps = connection.prepareStatement(
+                    "SELECT slot, item_id, count, nbt, placed_count FROM " + table + " WHERE " + scope + " ORDER BY slot")) {
+                bindStorage(ps, 1, owner, box);
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        int slot = rs.getInt("slot");
+                        if (slot >= 0 && slot < maxSlots) used.add(slot);
+                        int existing = rs.getInt("count");
+                        String storedNbt = rs.getString("nbt");
+                        if (available < count && itemId.equals(rs.getString("item_id")) && existing >= 0 && existing < 64
+                                && Objects.equals(nbt == null ? "" : nbt, storedNbt == null ? "" : storedNbt)) {
+                            stacks.add(new int[] {slot, existing, rs.getInt("placed_count")});
+                            available += 64 - existing;
                         }
                     }
                 }
             }
+            available += ((long) maxSlots - used.size()) * 64;
+            if (available < count) return false;
 
-            // Find empty slots
-            while (count > 0) {
-                int emptySlot = findEmptySlot(teamId, maxSlots);
-                if (emptySlot < 0) return false;
-
-                int toAdd = Math.min(count, 64);
-                String insSql = "INSERT INTO backpack_items (team_id, item_id, count, slot, nbt, placed_by, placed_time, placed_count, last_modified_by, last_modified_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-                try (PreparedStatement ps = connection.prepareStatement(insSql)) {
-                    ps.setString(1, teamId);
-                    ps.setString(2, itemId);
-                    ps.setInt(3, toAdd);
-                    ps.setInt(4, emptySlot);
-                    ps.setString(5, nbt);
-                    ps.setString(6, playerName);
-                    ps.setString(7, now);
-                    ps.setInt(8, toAdd);
-                    ps.setString(9, playerName);
-                    ps.setString(10, now);
-                    ps.executeUpdate();
+            String now = LocalDateTime.now(java.time.ZoneId.of("Asia/Shanghai"))
+                    .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            int remaining = count;
+            if (!stacks.isEmpty()) {
+                String placementUpdate = box == null ? ", placed_count=?" : "";
+                try (PreparedStatement ps = connection.prepareStatement(
+                        "UPDATE " + table + " SET count=count+?" + placementUpdate + ", last_modified_by=?, last_modified_time=? WHERE " + scope + " AND slot=?")) {
+                    for (int[] stack : stacks) {
+                        if (remaining == 0) break;
+                        int added = Math.min(remaining, 64 - stack[1]);
+                        int next = 1;
+                        ps.setInt(next++, added);
+                        if (box == null) ps.setInt(next++, (int) Math.min((long) stack[2] + added, 999_999_999L));
+                        ps.setString(next++, playerName);
+                        ps.setString(next++, now);
+                        next = bindStorage(ps, next, owner, box);
+                        ps.setInt(next, stack[0]);
+                        if (ps.executeUpdate() != 1) throw new SQLException("Deposit target row changed");
+                        remaining -= added;
+                    }
                 }
-                count -= toAdd;
             }
-            updateTimestamp(teamId);
+            if (remaining > 0) {
+                String ownerColumns = box == null ? "team_id" : "owner_uuid, box_name";
+                String ownerValues = box == null ? "?" : "?, ?";
+                try (PreparedStatement ps = connection.prepareStatement(
+                        "INSERT INTO " + table + " (" + ownerColumns + ", item_id, count, slot, nbt, placed_by, placed_time, placed_count, last_modified_by, last_modified_time) VALUES ("
+                                + ownerValues + ", ?, ?, ?, ?, ?, ?, ?, ?, ?)")) {
+                    int slot = 0;
+                    while (remaining > 0) {
+                        while (slot < maxSlots && used.contains(slot)) slot++;
+                        if (slot >= maxSlots) throw new SQLException("Deposit capacity changed");
+                        int added = Math.min(remaining, 64);
+                        int next = bindStorage(ps, 1, owner, box);
+                        ps.setString(next++, itemId);
+                        ps.setInt(next++, added);
+                        ps.setInt(next++, slot++);
+                        ps.setString(next++, nbt);
+                        ps.setString(next++, playerName);
+                        ps.setString(next++, now);
+                        ps.setInt(next++, added);
+                        ps.setString(next++, playerName);
+                        ps.setString(next, now);
+                        if (ps.executeUpdate() != 1) throw new SQLException("Deposit row was not inserted");
+                        remaining -= added;
+                    }
+                }
+            }
+            touchStorageTimestamp(owner, box);
+            connection.commit();
+            committed = true;
             return true;
         } catch (SQLException e) {
-            SharedBackpackMod.LOGGER.error("Failed to add item {} for team {}", itemId, teamId, e);
+            SharedBackpackMod.LOGGER.error("Failed to deposit item {} into {}/{}", itemId, owner, box, e);
             return false;
+        } finally {
+            finishStorageTransaction(transactionStarted, committed);
+        }
+    }
+
+    public synchronized boolean removeMatchingAtomic(String owner, String box, String itemId, String nbt, int count) {
+        if (!isReady() || owner == null || itemId == null || count <= 0) return false;
+        final NbtCompound target;
+        try {
+            target = parseStoredNbt(nbt);
+        } catch (CommandSyntaxException e) {
+            SharedBackpackMod.LOGGER.warn("Cannot remove item with invalid NBT from {}/{}", owner, box, e);
+            return false;
+        }
+        boolean transactionStarted = false;
+        boolean committed = false;
+        try {
+            if (!connection.getAutoCommit()) return false;
+            connection.setAutoCommit(false);
+            transactionStarted = true;
+            String table = box == null ? "backpack_items" : "player_box_items";
+            String scope = box == null ? "team_id=?" : "owner_uuid=? AND box_name=?";
+            List<int[]> matches = new ArrayList<>();
+            long available = 0;
+            try (PreparedStatement ps = connection.prepareStatement(
+                    "SELECT slot, count, nbt FROM " + table + " WHERE " + scope + " AND item_id=? ORDER BY slot")) {
+                int next = bindStorage(ps, 1, owner, box);
+                ps.setString(next, itemId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        int existing = rs.getInt("count");
+                        if (existing <= 0) continue;
+                        try {
+                            if (!Objects.equals(target, parseStoredNbt(rs.getString("nbt")))) continue;
+                        } catch (CommandSyntaxException invalidStoredNbt) {
+                            // A corrupt row must not match or prevent access to other valid rows.
+                            continue;
+                        }
+                        matches.add(new int[] {rs.getInt("slot"), existing});
+                        available += existing;
+                        if (available >= count) break;
+                    }
+                }
+            }
+            if (available < count) return false;
+            try (PreparedStatement delete = connection.prepareStatement(
+                    "DELETE FROM " + table + " WHERE " + scope + " AND slot=?");
+                 PreparedStatement update = connection.prepareStatement(
+                    "UPDATE " + table + " SET count=count-? WHERE " + scope + " AND slot=?")) {
+                int remaining = count;
+                for (int[] row : matches) {
+                    int removed = Math.min(remaining, row[1]);
+                    PreparedStatement ps = removed == row[1] ? delete : update;
+                    int next = 1;
+                    if (ps == update) ps.setInt(next++, removed);
+                    next = bindStorage(ps, next, owner, box);
+                    ps.setInt(next, row[0]);
+                    if (ps.executeUpdate() != 1) throw new SQLException("Removal target row changed");
+                    remaining -= removed;
+                    if (remaining == 0) break;
+                }
+            }
+            touchStorageTimestamp(owner, box);
+            connection.commit();
+            committed = true;
+            return true;
+        } catch (SQLException e) {
+            SharedBackpackMod.LOGGER.error("Failed to remove matching item {} from {}/{}", itemId, owner, box, e);
+            return false;
+        } finally {
+            finishStorageTransaction(transactionStarted, committed);
+        }
+    }
+
+    private static NbtCompound parseStoredNbt(String nbt) throws CommandSyntaxException {
+        if (nbt == null || nbt.isEmpty()) return null;
+        NbtCompound parsed = StringNbtReader.parse(nbt);
+        return parsed.isEmpty() ? null : parsed;
+    }
+
+    private static int bindStorage(PreparedStatement ps, int next, String owner, String box) throws SQLException {
+        ps.setString(next++, owner);
+        if (box != null) ps.setString(next++, box);
+        return next;
+    }
+
+    private void touchStorageTimestamp(String owner, String box) throws SQLException {
+        String sql = box == null
+                ? "INSERT INTO backpack_meta (team_id, max_pages, created_at, updated_at) VALUES (?, 1, datetime('now','localtime'), datetime('now','localtime')) ON CONFLICT(team_id) DO UPDATE SET updated_at=datetime('now','localtime')"
+                : "INSERT INTO player_box_meta (owner_uuid, box_name, max_pages, created_at, updated_at) VALUES (?, ?, 1, datetime('now','localtime'), datetime('now','localtime')) ON CONFLICT(owner_uuid, box_name) DO UPDATE SET updated_at=datetime('now','localtime')";
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+            bindStorage(ps, 1, owner, box);
+            if (ps.executeUpdate() != 1) throw new SQLException("Storage metadata was not updated");
+        }
+    }
+
+    private void finishStorageTransaction(boolean started, boolean committed) {
+        if (!started) return;
+        try {
+            if (!committed) connection.rollback();
+            connection.setAutoCommit(true);
+        } catch (SQLException e) {
+            // Never allow a later operation to commit a failed transaction's partial changes.
+            SharedBackpackMod.LOGGER.error("Failed to finish storage transaction; closing database", e);
+            close();
+            connection = null;
         }
     }
 
@@ -481,18 +626,6 @@ public class DatabaseManager {
 
     // ========== Player Box Methods ==========
 
-    private int findEmptyBoxSlot(String owner, String box, int maxSlots) throws SQLException {
-        Set<Integer> used = new HashSet<>();
-        try (PreparedStatement ps = connection.prepareStatement(
-                "SELECT slot FROM player_box_items WHERE owner_uuid=? AND box_name=? ORDER BY slot")) {
-            ps.setString(1, owner); ps.setString(2, box);
-            ResultSet rs = ps.executeQuery();
-            while (rs.next()) used.add(rs.getInt("slot"));
-        }
-        for (int i = 0; i < maxSlots; i++) if (!used.contains(i)) return i;
-        return -1;
-    }
-
     private void updateBoxTimestamp(String owner, String box) {
         if (!isReady()) return;
         try (PreparedStatement ps = connection.prepareStatement(
@@ -587,48 +720,8 @@ public class DatabaseManager {
     }
 
     public synchronized boolean addBoxItem(String owner, String box, String itemId, int count, String nbt, String playerName) {
-        if (!isReady()) return false;
-        int maxPages = getBoxMaxPages(owner, box);
-        int maxSlots = maxPages * SLOTS_PER_PAGE;
-        String now = LocalDateTime.now(java.time.ZoneId.of("Asia/Shanghai"))
-                .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
-        try {
-            String findSql = "SELECT slot, count FROM player_box_items WHERE owner_uuid=? AND box_name=? AND item_id=? AND ";
-            findSql += (nbt != null) ? "nbt = ?" : "(nbt IS NULL OR nbt='')";
-            try (PreparedStatement ps = connection.prepareStatement(findSql)) {
-                ps.setString(1, owner); ps.setString(2, box); ps.setString(3, itemId);
-                if (nbt != null) ps.setString(4, nbt);
-                ResultSet rs = ps.executeQuery();
-                while (rs.next() && count > 0) {
-                    int slot = rs.getInt("slot"); int existing = rs.getInt("count");
-                    if (existing < 64) {
-                        int canAdd = Math.min(count, 64 - existing);
-                        try (PreparedStatement up = connection.prepareStatement(
-                                "UPDATE player_box_items SET count=count+?, last_modified_by=?, last_modified_time=? WHERE owner_uuid=? AND box_name=? AND slot=?")) {
-                            up.setInt(1, canAdd); up.setString(2, playerName); up.setString(3, now);
-                            up.setString(4, owner); up.setString(5, box); up.setInt(6, slot);
-                            up.executeUpdate();
-                        }
-                        count -= canAdd;
-                    }
-                }
-            }
-            while (count > 0) {
-                int es = findEmptyBoxSlot(owner, box, maxSlots);
-                if (es < 0) return false;
-                int toAdd = Math.min(count, 64);
-                try (PreparedStatement ps = connection.prepareStatement(
-                        "INSERT INTO player_box_items (owner_uuid, box_name, item_id, count, slot, nbt, placed_by, placed_time, placed_count, last_modified_by, last_modified_time) VALUES (?,?,?,?,?,?,?,?,?,?,?)")) {
-                    ps.setString(1, owner); ps.setString(2, box); ps.setString(3, itemId);
-                    ps.setInt(4, toAdd); ps.setInt(5, es); ps.setString(6, nbt);
-                    ps.setString(7, playerName); ps.setString(8, now); ps.setInt(9, toAdd);
-                    ps.setString(10, playerName); ps.setString(11, now); ps.executeUpdate();
-                }
-                count -= toAdd;
-            }
-            updateBoxTimestamp(owner, box);
-            return true;
-        } catch (SQLException e) { SharedBackpackMod.LOGGER.error("Failed addBoxItem", e); return false; }
+        if (box == null) return false;
+        return depositAtomic(owner, box, itemId, count, nbt, playerName);
     }
 
     public synchronized boolean removeBoxItem(String owner, String box, int slot, int count) {
@@ -820,18 +913,38 @@ public class DatabaseManager {
         return map;
     }
 
-    private int findEmptySlot(String teamId, int maxSlots) throws SQLException {
-        String sql = "SELECT slot FROM backpack_items WHERE team_id = ? ORDER BY slot";
-        Set<Integer> used = new HashSet<>();
-        try (PreparedStatement ps = connection.prepareStatement(sql)) {
-            ps.setString(1, teamId);
-            ResultSet rs = ps.executeQuery();
-            while (rs.next()) used.add(rs.getInt("slot"));
+    public synchronized int[] loadViewPreferences(String playerUuid, String owner, String box) {
+        if (!isReady()) return new int[] {0, 0};
+        try (PreparedStatement ps = connection.prepareStatement(
+                "SELECT page, sort FROM storage_view_preferences WHERE player_uuid=? AND storage_owner=? AND storage_type=? AND box_name=?")) {
+            ps.setString(1, playerUuid);
+            ps.setString(2, owner);
+            ps.setInt(3, box == null ? 0 : 1);
+            ps.setString(4, box == null ? "" : box);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return new int[] {Math.max(0, rs.getInt("page")), Math.max(0, Math.min(5, rs.getInt("sort")))};
+            }
+        } catch (SQLException e) {
+            SharedBackpackMod.LOGGER.error("Failed to load view preferences for {} in {}/{}", playerUuid, owner, box, e);
         }
-        for (int i = 0; i < maxSlots; i++) {
-            if (!used.contains(i)) return i;
+        return new int[] {0, 0};
+    }
+
+    public synchronized void saveViewPreferences(String playerUuid, String owner, String box, int page, int sort) {
+        if (!isReady()) return;
+        try (PreparedStatement ps = connection.prepareStatement(
+                "INSERT INTO storage_view_preferences (player_uuid, storage_owner, storage_type, box_name, page, sort) VALUES (?, ?, ?, ?, ?, ?) "
+                        + "ON CONFLICT(player_uuid, storage_owner, storage_type, box_name) DO UPDATE SET page=excluded.page, sort=excluded.sort")) {
+            ps.setString(1, playerUuid);
+            ps.setString(2, owner);
+            ps.setInt(3, box == null ? 0 : 1);
+            ps.setString(4, box == null ? "" : box);
+            ps.setInt(5, Math.max(0, page));
+            ps.setInt(6, Math.max(0, Math.min(5, sort)));
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            SharedBackpackMod.LOGGER.error("Failed to save view preferences for {} in {}/{}", playerUuid, owner, box, e);
         }
-        return -1;
     }
 
     private void updateTimestamp(String teamId) {

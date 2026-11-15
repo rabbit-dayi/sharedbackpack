@@ -13,6 +13,7 @@ public final class OptionalClientNetworking {
     }
 
     public static void register() {
+        DashboardMenuBase.register();
         ServerDiagnostics.register();
         ServerPlayNetworking.registerGlobalReceiver(BackpackProtocol.REQUEST, (server, player, handler, buf, sender) -> {
             final int action;

@@ -3,7 +3,7 @@ package com.sharedbackpack.client.gui;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 
-public final class MinecraftGuiCanvas implements GuiCanvas {
+public final class MinecraftGuiCanvas implements DashboardView.Canvas {
     private final DrawContext context;
     private final MinecraftClient client = MinecraftClient.getInstance();
 
@@ -18,6 +18,15 @@ public final class MinecraftGuiCanvas implements GuiCanvas {
     }
 
     public int textWidth(String value) { return client.textRenderer.getWidth(value); }
+
+    public void item(com.sharedbackpack.client.DashboardModel.Entry entry, int x, int y) {
+        context.drawItem(entry.icon, x, y);
+        context.getMatrices().push();
+        context.getMatrices().translate(x + 16, y + 10, 200);
+        context.getMatrices().scale(0.75F, 0.75F, 1);
+        context.drawText(client.textRenderer, entry.countLabel, -client.textRenderer.getWidth(entry.countLabel), 0, 0xFFFFFF, true);
+        context.getMatrices().pop();
+    }
 
     public void icon(int index, int x, int y, int size) {
         

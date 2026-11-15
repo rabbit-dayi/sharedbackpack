@@ -1,28 +1,42 @@
 # Optional client compatibility
 
-The root project remains a dedicated-server mod (`environment: server`). The `client` subproject is an independent client-only addon (`environment: client`) with no dependency on the server mod or SQLite. Both compile only the small protocol constants from `src/protocol/java`.
+## Installation and rollout
 
-All inventory opens, slots, clicks, and item stacks continue to use vanilla generic containers. The server sends extra view metadata only when Fabric reports that a client supports `sharedbackpack:state_v1`. No client handshake is required to use `/c`, `/cc`, bindings, or the existing control bar.
+The root project remains a dedicated-server mod (`environment: server`). The `client` subproject is an independent client-only addon (`environment: client`) with no server implementation or SQLite dependency. Install matching 1.7.0 server/client releases for the warehouse dashboard; both Minecraft 1.16.5 and 1.20.1 are supported. The server remains usable without any client addon.
 
-The addon decorates an existing generic container only after receiving metadata for its active sync ID. It keeps the original screen and handler, and clears metadata when that screen closes or the connection ends. Unrelated chests and servers without the protocol keep their original interface. Search widgets fit in the original title row, including at small GUI sizes. The original inventory label and control icons remain visible.
+The server negotiates the dashboard only when a player advertises `sharedbackpack:dashboard_state_v1`. Clients without that channel retain the original commands and chest GUI. A new client connected to an older server that supports `state_v1` keeps the original title-row search enhancement. Servers without Shared Backpack and unrelated chests receive no dashboard. Unload remains the original 9x5 blank container.
 
-Client requests contain a protocol version and either an open action or a sync ID plus a query limited to 128 UTF-16 characters. The server parses bounded data before scheduling work on its main thread. It ignores unknown versions/actions, malformed or trailing data, unavailable databases, dead/spectator players, and searches that do not target the player's current backpack handler. The client never chooses a team, box owner, item slot, or inventory contents. A shortcut open is accepted only while the player's normal inventory handler is active. Filtering keeps the server cursor stack in place.
+## Independent interface
 
-Build both versions separately with `./gradlew clean build -PmcVersion=<version>`. CI publishes the server and optional client as separate artifacts for each Minecraft version.
+The dashboard has scrollable box navigation and box creation on the left, search and a 9x5 virtual catalog in the center, native player inventory below, and capacity, namespace filtering, upgrade, diagnostics, refresh and a deposit slot on the right. It fits a 320x240 scaled GUI. Existing boxes beyond the visible rows are reachable by scrolling the sidebar. Blank box names generate a unique name; switching boxes is validated against the current team on the server.
 
-Diagnostics use separate `status_request_v1` and `status_v1` channels, leaving the original view/search protocol compatible with earlier addons. Requests include a sequence and the active backpack sync ID. The client polls every two seconds only while the information panel is open; the server checks the current handler, advertised response channel, and a one-second per-player rate limit. Disconnect clears the limit and all client counters. Replies contain bounded version strings and aggregate status, without file paths or player names. Sequence checks reject late replies and a six-second timeout marks cached data stale. The server measures tick work with a fixed 100-entry ring buffer.
+Catalog entries aggregate identical item IDs and structurally equal complete NBT. Counts are separate 64-bit values, not oversized `ItemStack` counts. Hover shows the exact quantity; inventory withdrawals respect the item's native maximum stack size. Durability, names, enchantments, maps, nested data, list order and NBT numeric types remain significant. Physical database rows remain capped at 64 for compatibility; the capacity readout counts those rows, not virtual catalog entries. Aggregation does not provide unlimited physical storage.
 
-Upload/download counters include view metadata, search/open requests, and diagnostics payloads only; they exclude vanilla container packets and network overhead. Rates sample monotonic time once per second and average the last four intervals, and totals reset per connection. Request RTT includes main-thread scheduling. These figures do not measure the full connection bandwidth or TPS.
+Search uses the client's actual localized item names, full pinyin, initials and registry IDs, with multiple whitespace-separated terms. Filtering, namespace selection, six sort orders and paging are local. Language/resource reloads rebuild localized search names. Command queries such as `/c shitou` initialize the new dashboard search. Page and sort preferences are stored in SQLite per player, storage owner, team/box storage type and box name. Search does not overwrite the remembered unfiltered page; clearing it restores that page, clamped to available results. Preferences survive server restart.
 
-The client uses a small PNG icon atlas with a rect-based SVG source in `client/art/icons.svg`. `python3 client/art/generate_icons.py` recreates the texture without third-party dependencies. Icon buttons retain translated names/tooltips. The information panel fits the minimum GUI size and consumes keyboard, mouse, wheel, and drag input while it covers the original container.
+## Inventory ownership and transactions
 
-Manual multiplayer checks for a release:
+The server uses a vanilla 9x6 container to synchronize real inventory slots. Slots 0–44 and 46–53 are empty, read-only dummy slots hidden by the client; slot 45 is the real deposit slot; slots 54–89 are the player's main inventory and hotbar. Virtual catalog cells never contain transferable inventory stacks. The client reuses the opened handler in its independent `HandledScreen` rather than closing/reopening it during screen replacement.
 
-- Start a dedicated server with only the server JAR and Fabric API. Join with an unmodified matching Minecraft client; check `/c`, `/c <query>`, box management, item moves, and unload mode.
-- Join the same server with Fabric API and only the optional client JAR. Check `B`, commands, search by Enter/button, clear, paging, mod filtering, sorting, boxes, upgrades, unload, resize, and GUI scale.
-- Hold a tagged item on the cursor while submitting/clearing a search. Close the menu and confirm that the item and its complete NBT remain intact.
-- Focus search and type letters bound to inventory/hotbar/drop actions; typing must not trigger those actions. Check Esc, clicks, clipboard shortcuts, and a query of 128 characters.
-- Open ordinary chests after a backpack, reconnect, and join a server without the server mod. Check that no search widgets appear on ordinary containers and `B` causes no request on unsupported servers.
-- Keep a player without the addon connected alongside a player with it, and repeat shared storage operations for both.
-- Open the information panel and check version/health values, periodic rates, cumulative counters, close/Esc, and GUI resize. Hold an item on the cursor and confirm clicks and number/drop keys cannot interact with the covered inventory. Close the panel and confirm polling stops; reconnect and confirm traffic totals reset.
-- Send status requests with the wrong screen ID, an unsupported protocol version, malformed/trailing data, and repeated requests within one second. Check they produce no reply and leave the vanilla connection working. Test an older server without the status endpoint; its search bar should still work.
+Left-click withdraws one item to the cursor. Right-click withdraws up to one native stack. Shift+left-click withdraws a stack directly into free inventory space. Server-owned catalog keys and revisions identify the complete item identity; client-supplied item IDs, NBT, owners or arbitrary quantities cannot choose a withdrawal. Removal rechecks live matching rows in one SQLite transaction before giving items to the player.
+
+Shift+left-click on player inventory sends the native quick-move request without generic-container inventory prediction. The source remains visible until the server commits the entire deposit and synchronizes its removal. Clicking the deposit slot with a carried stack similarly clears the cursor only after a successful server transaction. A physical deposit-slot item drains after vanilla click processing at the end of the server tick, not during cursor ownership transitions. Full storage or SQL failure keeps the original items; failed physical deposits and carried items return to inventory on close, dropping only overflow under normal inventory-full semantics. Upgrades consume a diamond only after the database upgrade succeeds.
+
+`addItem`, `addBoxItem` and the dashboard share the same all-or-nothing deposit path. Capacity failures cannot partially merge items and then return failure. SQLite rollback covers item rows and storage timestamps. The migration only adds the preference table and does not rewrite stored item NBT.
+
+## Wire protocol
+
+`dashboard_request_v1` and `dashboard_state_v1` are separate from the legacy search protocol. Requests carry version, active sync ID and a bounded action body. The server ignores malformed/trailing input, unknown versions/actions, stale handlers/revisions, dead/spectator players and requests outside the player's current team or existing boxes.
+
+Catalog snapshots carry a sync ID and revision, storage metadata/preferences/box names in the first chunk, and at most 32 entries per chunk. Icons retain complete NBT with count one; aggregate quantities are transmitted independently. Only the final chunk commits the client's new catalog, so a partial refresh never replaces the current visible list. A server-side comparison once per second refreshes open viewers when rows, capacity or boxes change; unchanged data sends no new catalog. Explicit operations refresh immediately. Status uses the existing separately versioned diagnostic channels.
+
+Diagnostics poll every two seconds while the dashboard is open, with the existing active-handler checks and one-second server rate limit. Replies contain aggregate health data without file paths or player names. Traffic counters include legacy and dashboard addon payloads, not vanilla slot/item packets, other mods, compression or TCP/IP overhead. RTT includes server scheduling; the fixed 100-tick work average is not TPS.
+
+## Verification
+
+- `./gradlew build -PmcVersion=1.16.5` and `./gradlew build -PmcVersion=1.20.1` compile both artifacts and run five isolated real-SQLite regression tests: capacity rollback, injected SQL failure after a merge, structural-NBT multirow removal, numeric-type/list-order separation, and persisted/scoped preferences.
+- Live dedicated-server/client smoke checks cover both targets: 200-count entries, localized pinyin/initials/ID filtering, normal-stack withdrawals, cursor and Shift deposits, full-storage item retention, box switching, page/sort restore, and a 320x240 GUI.
+- A live 1.16.5 protocol probe covers no-addon fallback, NBT-separated aggregation, native deposit-slot draining, stale sync/revision rejection and box-specific preferences.
+- `docs/client-dashboard.png` is an actual 1.16.5 multiplayer screenshot with sample items stored in the real SQLite database, not a mockup. The main README displays it.
+
+Editable diagnostic icon source remains `client/art/icons.svg`; regenerate its checked-in PNG atlas with `python3 client/art/generate_icons.py` (standard library only).

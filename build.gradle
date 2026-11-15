@@ -32,7 +32,7 @@ if (target == null) {
     throw new GradleException("Unsupported Minecraft version '${minecraftVersion}'. Supported versions: ${supportedTargets.keySet().join(', ')}")
 }
 
-version = '1.6.0'
+version = '1.7.0'
 group = 'com.sharedbackpack'
 ext.minecraftVersion = minecraftVersion
 ext.minecraftTarget = target
@@ -51,6 +51,7 @@ dependencies {
     mappings "net.fabricmc:yarn:${target.yarn}:v2"
     modImplementation "net.fabricmc:fabric-loader:${target.loader}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${target.fabricApi}"
+    testImplementation 'junit:junit:4.13.2'
 
     implementation('org.xerial:sqlite-jdbc:3.45.1.0') {
         exclude group: 'org.slf4j', module: 'slf4j-api'

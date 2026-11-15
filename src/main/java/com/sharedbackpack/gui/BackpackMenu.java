@@ -528,6 +528,11 @@ abstract class BackpackMenuBase extends ScreenHandler {
                 tid = target;
             }
         }
+        if (!unload && net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.canSend(player,
+                com.sharedbackpack.protocol.DashboardProtocol.STATE)) {
+            DashboardMenuBase.open(player, isBox ? storageOwner : tid, isBox ? tid : null, search);
+            return;
+        }
         int mp = isBox ? SharedBackpackMod.database.getBoxMaxPages(storageOwner, tid) : SharedBackpackMod.database.getMaxPages(tid);
         int cp = Math.max(0, Math.min(page, mp-1));
         String dn = tid; if (isBox && tid.contains(":")) dn = tid.substring(tid.lastIndexOf(':')+1);

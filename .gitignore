@@ -13,6 +13,7 @@ net/
 *.png
 !docs/screenshot.png
 !docs/client-status.png
+!docs/client-dashboard.png
 !client/src/main/resources/assets/sharedbackpack/textures/gui/*.png
 local/
 tmp/

@@ -5,7 +5,7 @@ import net.minecraft.client.gui.DrawableHelper;
 import net.minecraft.client.util.math.MatrixStack;
 import com.mojang.blaze3d.systems.RenderSystem;
 
-public final class MinecraftGuiCanvas implements GuiCanvas {
+public final class MinecraftGuiCanvas implements DashboardView.Canvas {
     private final MatrixStack context;
     private final MinecraftClient client = MinecraftClient.getInstance();
 
@@ -20,6 +20,15 @@ public final class MinecraftGuiCanvas implements GuiCanvas {
     }
 
     public int textWidth(String value) { return client.textRenderer.getWidth(value); }
+
+    public void item(com.sharedbackpack.client.DashboardModel.Entry entry, int x, int y) {
+        client.getItemRenderer().renderInGuiWithOverrides(entry.icon, x, y);
+        context.push();
+        context.translate(x + 16, y + 10, 300);
+        context.scale(0.75F, 0.75F, 1);
+        client.textRenderer.drawWithShadow(context, entry.countLabel, -client.textRenderer.getWidth(entry.countLabel), 0, 0xFFFFFF);
+        context.pop();
+    }
 
     public void icon(int index, int x, int y, int size) {
         client.getTextureManager().bindTexture(GuiIcons.ATLAS);
