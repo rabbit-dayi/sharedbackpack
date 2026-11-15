@@ -4,13 +4,35 @@
 [![Java](https://img.shields.io/badge/Java-8%2B%20%7C%2017%2B-blue)](https://adoptium.net/)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-![Optional client warehouse dashboard / 可选客户端仓储界面](docs/client-dashboard.png)
-
 A server-only Minecraft Fabric mod for 1.16.5 and 1.20.1, providing a team-shared backpack with SQLite storage, fuzzy Chinese pinyin search, and player-customizable boxes. An independent optional client addon provides a three-panel warehouse dashboard with aggregate item counts, localized pinyin search, box navigation, and safe quick deposits.
 
 默认只需安装在服务端的 Minecraft Fabric 模组，支持 1.16.5 与 1.20.1，提供基于 SQLite 的团队共享背包、模糊拼音搜索和玩家自定义盒子。独立的可选客户端提供三栏仓储界面、超 64 数量聚合、客户端名称拼音搜索、盒子切换与安全快速存入；不要求所有玩家安装。
 
 ---
+
+## Vanilla GUI Controls / 无客户端时的原版界面
+
+The original chest interface remains available when only the server mod is installed.
+
+仅安装服务端模组时，仍使用下图的原版箱子界面，玩家无需安装客户端模组。
+
+![Original server-only chest interface / 原版服务端箱子界面](docs/screenshot.png)
+
+Bottom row (slots 45-53) is the control bar:
+
+| Slot | Icon | Function |
+|------|------|----------|
+| 45 | Arrow ◀ | Previous page / 上一页 |
+| 46 | Paper | Page indicator / 页码 |
+| 47 | Book | Item count / 物品总数 |
+| 48 | Name Tag / Chest | Team/Box info, click for box menu / 队伍/盒子，点击管理盒子 |
+| 49 | Bookshelf | Mod filter menu / 模组分类菜单 |
+| 50 | Compass | Search info (if active) / 搜索信息 |
+| 51 | Hopper | Sort/consolidate / 整理物品 |
+| 52 | Diamond | Upgrade (+1 page, 1 diamond) / 升级背包 |
+| 53 | Arrow ▶ | Next page / 下一页 |
+
+**Click behavior:** Left click = take 1, Right click = take stack, Shift+click = quick move
 
 ## Features / 功能
 
@@ -26,6 +48,8 @@ A server-only Minecraft Fabric mod for 1.16.5 and 1.20.1, providing a team-share
 - **Optional warehouse dashboard** — Configurable `B` shortcut; box sidebar, virtual item grid, inventory and deposit slot, capacity/status sidebar, local pinyin search, and remembered page/sort per player and storage
 
 ### Optional client GUI / 可选客户端界面
+
+![Optional client warehouse dashboard / 可选客户端仓储界面](docs/client-dashboard.png)
 
 | Installation / 安装方式 | Behavior / 行为 |
 |------------------------|------------------|
@@ -86,30 +110,6 @@ Editable icon source: `client/art/icons.svg`. The game uses the checked-in PNG a
 Identical item IDs **and complete NBT** share one virtual catalog entry, whose count can exceed 64; hover for the exact count. Durability, names, enchantments, maps and mod tags remain distinct. This does not create oversized inventory stacks or remove storage capacity limits: the database keeps compatible physical rows of at most 64, and the capacity panel reports those rows. Deposits commit in full or not at all. Items that could not be stored remain with the player; an uncommitted deposit slot is returned on close.
 
 物品 ID 和 **完整 NBT** 相同才合并为一个虚拟目录格，数量可超过 64，悬停可查看精确总数；耐久、名称、附魔、地图和模组标签不同仍分别显示。聚合不会生成超量的原版物品堆，也不取消容量限制：数据库保留每行最多 64 个的兼容存储，右侧容量显示实际占用行数。存入要么整组成功，要么完全不写入；失败不清空物品，关闭时未提交的投入格会退回玩家。
-
-### Vanilla GUI Controls / 无客户端时的原版界面
-
-The original chest interface remains available when only the server mod is installed.
-
-仅安装服务端模组时，仍使用下图的原版箱子界面，玩家无需安装客户端模组。
-
-![Original server-only chest interface / 原版服务端箱子界面](docs/screenshot.png)
-
-Bottom row (slots 45-53) is the control bar:
-
-| Slot | Icon | Function |
-|------|------|----------|
-| 45 | Arrow ◀ | Previous page / 上一页 |
-| 46 | Paper | Page indicator / 页码 |
-| 47 | Book | Item count / 物品总数 |
-| 48 | Name Tag / Chest | Team/Box info, click for box menu / 队伍/盒子，点击管理盒子 |
-| 49 | Bookshelf | Mod filter menu / 模组分类菜单 |
-| 50 | Compass | Search info (if active) / 搜索信息 |
-| 51 | Hopper | Sort/consolidate / 整理物品 |
-| 52 | Diamond | Upgrade (+1 page, 1 diamond) / 升级背包 |
-| 53 | Arrow ▶ | Next page / 下一页 |
-
-**Click behavior:** Left click = take 1, Right click = take stack, Shift+click = quick move
 
 ## Build / 构建
 
