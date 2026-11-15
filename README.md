@@ -89,6 +89,12 @@ Identical item IDs **and complete NBT** share one virtual catalog entry, whose c
 
 ### Vanilla GUI Controls / 无客户端时的原版界面
 
+The original chest interface remains available when only the server mod is installed.
+
+仅安装服务端模组时，仍使用下图的原版箱子界面，玩家无需安装客户端模组。
+
+![Original server-only chest interface / 原版服务端箱子界面](docs/screenshot.png)
+
 Bottom row (slots 45-53) is the control bar:
 
 | Slot | Icon | Function |
