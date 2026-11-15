@@ -43,3 +43,11 @@ jobs:
           path: build/libs/sharedbackpack-fabric-${{ matrix.minecraft }}-*.jar
           if-no-files-found: error
           retention-days: 14
+
+      - name: Upload optional client artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: sharedbackpack-client-fabric-${{ matrix.minecraft }}
+          path: client/build/libs/sharedbackpack-client-fabric-${{ matrix.minecraft }}-*.jar
+          if-no-files-found: error
+          retention-days: 14

@@ -8,6 +8,7 @@ import com.sharedbackpack.commands.DebugCommand;
 import com.sharedbackpack.compat.CommandRegistrar;
 import com.sharedbackpack.database.DatabaseManager;
 import com.sharedbackpack.gui.BackpackMenuHandler;
+import com.sharedbackpack.gui.OptionalClientNetworking;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import org.apache.logging.log4j.LogManager;
@@ -38,6 +39,7 @@ public class SharedBackpackMod implements ModInitializer {
         });
         CommandRegistrar.register();
         BackpackMenuHandler.register();
+        OptionalClientNetworking.register();
         LOGGER.info("Shared Backpack Fabric mod loaded (server-only)");
     }
 }

@@ -1,0 +1,47 @@
+plugins {
+    id 'fabric-loom'
+}
+
+version = rootProject.version
+group = rootProject.group
+def minecraftVersion = rootProject.minecraftVersion
+def target = rootProject.minecraftTarget
+
+base {
+    archivesName = "sharedbackpack-client-fabric-${minecraftVersion}"
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${minecraftVersion}"
+    mappings "net.fabricmc:yarn:${target.yarn}:v2"
+    modImplementation "net.fabricmc:fabric-loader:${target.loader}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${target.fabricApi}"
+}
+
+sourceSets.main.java {
+    srcDir "src/compat/${target.compat}/java"
+    srcDir rootProject.file('src/protocol/java')
+}
+
+processResources {
+    inputs.properties version: project.version, minecraftVersion: minecraftVersion,
+            loaderVersion: target.loaderDependency, javaVersion: target.javaDependency
+    filesMatching('fabric.mod.json') {
+        expand version: project.version, minecraft_version: minecraftVersion,
+                loader_version: target.loaderDependency, java_version: target.javaDependency
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = target.java
+}
+
+java {
+    sourceCompatibility = JavaVersion.toVersion(target.java)
+    targetCompatibility = JavaVersion.toVersion(target.java)
+}

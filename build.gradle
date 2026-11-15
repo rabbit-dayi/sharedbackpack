@@ -1,5 +1,5 @@
 plugins {
-    id 'fabric-loom' version '1.6-SNAPSHOT'
+    id 'fabric-loom' version '1.17.21'
     id 'maven-publish'
 }
 
@@ -32,8 +32,10 @@ if (target == null) {
     throw new GradleException("Unsupported Minecraft version '${minecraftVersion}'. Supported versions: ${supportedTargets.keySet().join(', ')}")
 }
 
-version = '1.5.11'
+version = '1.6.0'
 group = 'com.sharedbackpack'
+ext.minecraftVersion = minecraftVersion
+ext.minecraftTarget = target
 
 base {
     archivesName = "sharedbackpack-fabric-${minecraftVersion}"
@@ -80,6 +82,7 @@ processResources {
 sourceSets {
     main {
         java.srcDir "src/compat/${target.compat}/java"
+        java.srcDir 'src/protocol/java'
     }
 }
 

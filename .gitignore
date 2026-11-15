@@ -12,5 +12,7 @@ run/
 net/
 *.png
 !docs/screenshot.png
+!docs/client-status.png
+!client/src/main/resources/assets/sharedbackpack/textures/gui/*.png
 local/
 tmp/

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "sharedbackpack_client",
+  "version": "${version}",
+  "name": "Shared Backpack Client (Optional)",
+  "description": "Optional search bar and backpack shortcut for Shared Backpack servers.",
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["com.sharedbackpack.client.SharedBackpackClient"]
+  },
+  "mixins": ["sharedbackpack-client.mixins.json"],
+  "depends": {
+    "fabricloader": "${loader_version}",
+    "fabric-key-binding-api-v1": "*",
+    "fabric-lifecycle-events-v1": "*",
+    "fabric-networking-api-v1": "*",
+    "minecraft": "${minecraft_version}",
+    "java": "${java_version}"
+  }
+}

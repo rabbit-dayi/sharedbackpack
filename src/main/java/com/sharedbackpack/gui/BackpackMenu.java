@@ -39,7 +39,7 @@ abstract class BackpackMenuBase extends ScreenHandler {
     private final String teamId;
     protected final ServerPlayerEntity player;
     private final int maxPages;
-    private final String searchFilter;
+    private String searchFilter;
     private final boolean unloadMode;
     private final boolean isBox;
     private final String boxOwner;
@@ -289,7 +289,21 @@ abstract class BackpackMenuBase extends ScreenHandler {
         return new ItemStack(Items.BOOKSHELF);
     }
 
-    private void refreshPage() { loadPage(); sendContentUpdates(); }
+    private void refreshPage() { loadPage(); sendContentUpdates(); syncOptionalClient(); }
+
+    // Filtering changes the view only; the carried stack stays on the server-owned cursor.
+    public void applyClientSearch(String query) {
+        if (unloadMode) return;
+        searchFilter = query;
+        currentMenu = null;
+        modFilter = null;
+        page = 0;
+        refreshPage();
+    }
+
+    public void syncOptionalClient() {
+        OptionalClientNetworking.sendState(player, syncId, searchFilter, unloadMode);
+    }
     private void navigateToPage(int np) { stashCarried(); page = np; refreshPage(); }
     private void cycleSortMode() { displaySort = (displaySort + 1) % 5; PLAYER_SORT_PREF.put(player.getUuidAsString(), displaySort); page = 0; refreshPage(); }
 
@@ -532,6 +546,10 @@ abstract class BackpackMenuBase extends ScreenHandler {
             }
             public Text getDisplayName() { return MinecraftCompat.text(ft); }
         });
+        // Send after the vanilla open packet, so the optional client can identify this exact screen.
+        if (player.currentScreenHandler instanceof BackpackMenu) {
+            ((BackpackMenu) player.currentScreenHandler).syncOptionalClient();
+        }
     }
 
     // ===== Menu System =====
