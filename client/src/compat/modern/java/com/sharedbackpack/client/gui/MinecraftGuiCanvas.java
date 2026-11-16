@@ -24,7 +24,9 @@ public final class MinecraftGuiCanvas implements DashboardView.Canvas {
         context.getMatrices().push();
         context.getMatrices().translate(x + 16, y + 10, 200);
         context.getMatrices().scale(0.75F, 0.75F, 1);
-        context.drawText(client.textRenderer, entry.countLabel, -client.textRenderer.getWidth(entry.countLabel), 0, 0xFFFFFF, true);
+        int labelWidth = client.textRenderer.getWidth(entry.countLabel);
+        context.fill(-labelWidth - 1, -1, 1, 9, DashboardTheme.SURFACE);
+        context.drawText(client.textRenderer, entry.countLabel, -labelWidth, 0, DashboardTheme.TEXT, false);
         context.getMatrices().pop();
     }
 

@@ -38,7 +38,7 @@ public abstract class DashboardMenuBase extends ScreenHandler {
     private static final int DEPOSIT = 45;
     protected final ServerPlayerEntity player;
     private final String owner;
-    private final String box;
+    private String box;
     private String initialQuery = "";
     private final SimpleInventory inventory = new SimpleInventory(54);
     private List<DatabaseManager.BackpackItem> previousRows = Collections.emptyList();
@@ -216,7 +216,19 @@ public abstract class DashboardMenuBase extends ScreenHandler {
 
     private void switchStorage(String name) {
         if (!name.isEmpty() && !db().listBoxes(owner).contains(name)) return;
-        open(player, owner, name.isEmpty() ? null : name);
+        String target = name.isEmpty() ? null : name;
+        if (Objects.equals(box, target)) return;
+        // A pending physical deposit belongs to the old storage, never the newly selected box.
+        ItemStack pending = inventory.removeStack(DEPOSIT);
+        if (!pending.isEmpty() && !deposit(pending)
+                && !MinecraftCompat.inventory(player).insertStack(pending)) player.dropItem(pending, false);
+        box = target;
+        initialQuery = "";
+        int[] preferences = db().loadViewPreferences(player.getUuidAsString(), owner, box);
+        page = preferences[0];
+        sort = preferences[1];
+        refresh(true);
+        sendContentUpdates();
     }
 
     private void createBox(String name) {
@@ -228,7 +240,7 @@ public abstract class DashboardMenuBase extends ScreenHandler {
         if (name.length() > DashboardProtocol.MAX_TEXT || name.indexOf(':') >= 0 || name.indexOf('\n') >= 0
                 || name.indexOf('\r') >= 0 || boxes.contains(name)) return;
         db().createBox(owner, name);
-        if (db().listBoxes(owner).contains(name)) open(player, owner, name);
+        if (db().listBoxes(owner).contains(name)) switchStorage(name);
     }
 
     private void upgrade() {
@@ -319,10 +331,6 @@ public abstract class DashboardMenuBase extends ScreenHandler {
     }
     protected abstract ItemStack cursor();
     protected abstract void cursor(ItemStack stack);
-
-    public static void open(ServerPlayerEntity player, String owner, String box) {
-        open(player, owner, box, "");
-    }
 
     public static void open(ServerPlayerEntity player, String owner, String box, String query) {
         if (!owner.equals(TeamResolver.resolvePrimaryTeam(player))) return;

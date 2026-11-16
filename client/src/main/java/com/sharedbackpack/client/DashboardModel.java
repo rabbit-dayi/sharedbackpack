@@ -76,6 +76,7 @@ public final class DashboardModel {
     public int rememberedPage() { return rememberedPage; }
     public int pages() { return Math.max(1, (visible.size() + PAGE_SIZE - 1) / PAGE_SIZE); }
     public long total() { return total; }
+    public int matches() { return visible.size(); }
     private boolean unfiltered() { return query.trim().isEmpty() && namespace.isEmpty(); }
 
     public String namespace() { return namespace; }
@@ -96,6 +97,8 @@ public final class DashboardModel {
         boolean changedStorage = snapshot == null || !snapshot.storage.equals(next.storage);
         snapshot = next;
         if (changedStorage) {
+            query = "";
+            namespace = "";
             rememberedPage = Math.max(0, next.savedPage);
             sort = Math.max(0, Math.min(5, next.savedSort));
             page = rememberedPage;

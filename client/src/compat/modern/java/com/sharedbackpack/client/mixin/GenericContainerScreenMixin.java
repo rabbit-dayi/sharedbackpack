@@ -129,7 +129,7 @@ public abstract class GenericContainerScreenMixin extends HandledScreen<GenericC
         if (!sharedbackpack$infoOpen) return;
         context.getMatrices().push();
         context.getMatrices().translate(0, 0, 500);
-        DiagnosticsPanel.draw(new MinecraftGuiCanvas(context), width, height);
+        DiagnosticsPanel.draw(new MinecraftGuiCanvas(context), width, height, null, false);
         context.getMatrices().pop();
     }
 

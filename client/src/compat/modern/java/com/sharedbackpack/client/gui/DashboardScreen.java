@@ -36,6 +36,9 @@ public final class DashboardScreen extends HandledScreen<GenericContainerScreenH
         search = addDrawableChild(new TextFieldWidget(textRenderer, view.center + 4, y + 5, 142, 16,
                 DashboardPlatform.literal(DashboardView.tr("search"))));
         search.setMaxLength(128);
+        search.setDrawsBackground(false);
+        search.setEditableColor(DashboardTheme.TEXT);
+        search.setUneditableColor(DashboardTheme.MUTED);
         search.setText(view.model.query());
         search.setSuggestion(search.getText().isEmpty() ? DashboardView.tr("search") : null);
         search.setChangedListener(value -> {
@@ -45,6 +48,9 @@ public final class DashboardScreen extends HandledScreen<GenericContainerScreenH
         boxName = addDrawableChild(new TextFieldWidget(textRenderer, x + 4, y + view.height - 44, view.side - 4, 16,
                 DashboardPlatform.literal(DashboardView.tr("box_name"))));
         boxName.setMaxLength(128);
+        boxName.setDrawsBackground(false);
+        boxName.setEditableColor(DashboardTheme.TEXT);
+        boxName.setUneditableColor(DashboardTheme.MUTED);
         boxName.setText(view.boxDraft);
         boxName.setSuggestion(boxName.getText().isEmpty() ? DashboardView.tr("box_name") : null);
         boxName.setChangedListener(value -> {
@@ -60,12 +66,13 @@ public final class DashboardScreen extends HandledScreen<GenericContainerScreenH
     @Override protected void drawForeground(DrawContext context, int mouseX, int mouseY) {}
 
     @Override public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+        if (!search.getText().equals(view.model.query())) search.setText(view.model.query());
         renderBackground(context);
-        super.render(context, mouseX, mouseY, delta);
         if (view.infoOpen) {
-            DiagnosticsPanel.draw(new MinecraftGuiCanvas(context), width, height);
+            DiagnosticsPanel.draw(new MinecraftGuiCanvas(context), width, height, view.model, view.storageInfo);
             return;
         }
+        super.render(context, mouseX, mouseY, delta);
         int cell = view.cell(mouseX, mouseY);
         DashboardModel.Entry entry = cell < 0 ? null : view.model.entry(cell);
         if (entry != null) {
@@ -94,6 +101,10 @@ public final class DashboardScreen extends HandledScreen<GenericContainerScreenH
     @Override public boolean mouseClicked(double mx, double my, int button) {
         if (view.infoOpen) {
             if (DiagnosticsPanel.closeHit(width, height, mx, my)) view.infoOpen = false;
+            if (button == 0) {
+                int tab = DiagnosticsPanel.tabHit(width, height, mx, my);
+                if (tab >= 0) view.storageInfo = tab == 1;
+            }
             return true;
         }
         if (view.clickGrid(mx, my, button, hasShiftDown())) {
@@ -134,6 +145,7 @@ public final class DashboardScreen extends HandledScreen<GenericContainerScreenH
     @Override public boolean keyPressed(int key, int scan, int modifiers) {
         if (view.infoOpen) {
             if (key == GLFW.GLFW_KEY_ESCAPE) view.infoOpen = false;
+            else if (key == GLFW.GLFW_KEY_TAB) view.storageInfo = !view.storageInfo;
             return true;
         }
         TextFieldWidget focused = search.isFocused() ? search : boxName.isFocused() ? boxName : null;

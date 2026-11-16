@@ -32,6 +32,7 @@ public final class DashboardView {
     public final DashboardModel model;
     public int left, top, width, height, side, center, right, gridY, inventoryY, boxRows;
     public boolean infoOpen;
+    public boolean storageInfo;
     public String boxDraft = "";
     private int boxScroll;
     private List<Control> controls;
@@ -141,21 +142,23 @@ public final class DashboardView {
 
     public void draw(Canvas canvas, int mouseX, int mouseY) {
         DashboardModel.Snapshot snapshot = model.snapshot();
-        canvas.fill(left, top, left + width, top + height, 0xFF101923);
-        canvas.fill(left + 1, top + 1, center - 2, top + height - 1, 0xFF1B2B3A);
-        canvas.fill(center, top + 1, right - 3, top + height - 1, 0xFF172432);
-        canvas.fill(right, top + 1, left + width - 1, top + height - 1, 0xFF1B2B3A);
-        label(canvas, tr("boxes"), left + 5, top + 7, side - 6, 0xE7F0FA);
-        label(canvas, tr("info"), right + 5, top + 7, side - 7, 0xE7F0FA);
-        label(canvas, snapshot.storage.isEmpty() ? tr("team") : snapshot.storage, right + 5, top + 25, side - 7, 0x73DDB9);
-        label(canvas, tr("capacity"), right + 5, top + 43, side - 7, 0x9DAFC3);
-        label(canvas, snapshot.usedSlots + "/" + ((long) snapshot.maxPages * 45), right + 5, top + 56, side - 7, 0xE7F0FA);
-        label(canvas, tr("total"), right + 5, top + 74, side - 7, 0x9DAFC3);
-        label(canvas, Long.toString(model.total()), right + 5, top + 87, side - 7, 0xE7F0FA);
+        canvas.fill(left, top, left + width, top + height, DashboardTheme.BORDER);
+        canvas.fill(left + 1, top + 1, center - 2, top + height - 1, DashboardTheme.SIDEBAR);
+        canvas.fill(center, top + 1, right - 3, top + height - 1, DashboardTheme.BACKGROUND);
+        canvas.fill(right, top + 1, left + width - 1, top + height - 1, DashboardTheme.SIDEBAR);
+        field(canvas, center + 3, top + 4, 144);
+        field(canvas, left + 3, top + height - 45, side - 2);
+        label(canvas, tr("boxes"), left + 5, top + 7, side - 6, DashboardTheme.TEXT);
+        label(canvas, tr("info"), right + 5, top + 7, side - 7, DashboardTheme.TEXT);
+        label(canvas, snapshot.storage.isEmpty() ? tr("team") : snapshot.storage, right + 5, top + 25, side - 7, DashboardTheme.ACCENT);
+        label(canvas, tr("capacity"), right + 5, top + 43, side - 7, DashboardTheme.MUTED);
+        label(canvas, snapshot.usedSlots + "/" + ((long) snapshot.maxPages * 45), right + 5, top + 56, side - 7, DashboardTheme.TEXT);
+        label(canvas, tr("total"), right + 5, top + 74, side - 7, DashboardTheme.MUTED);
+        label(canvas, Long.toString(model.total()), right + 5, top + 87, side - 7, DashboardTheme.TEXT);
         String health = !ClientDiagnostics.supported() ? "unsupported" : ClientDiagnostics.status() == null ? "waiting"
                 : ClientDiagnostics.stale() ? "stale" : "live";
-        label(canvas, tr("status." + health), right + 5, top + 185, side - 7, 0x73DDB9);
-        label(canvas, tr("deposit"), right + 5, top + 197, side - 7, 0xE7F0FA);
+        label(canvas, tr("status." + health), right + 5, top + 185, side - 7, DashboardTheme.SUCCESS);
+        label(canvas, tr("deposit"), right + 5, top + 197, side - 7, DashboardTheme.TEXT);
         slot(canvas, right + 7, top + 210);
         for (int i = 0; i < 45; i++) {
             int x = center + 4 + i % 9 * 18, y = gridY + i / 9 * 18;
@@ -168,30 +171,34 @@ public final class DashboardView {
         int hover = cell(mouseX, mouseY);
         if (hover >= 0) {
             int x = center + 4 + hover % 9 * 18, y = gridY + hover / 9 * 18;
-            canvas.fill(x, y, x + 16, y + 16, 0x50FFFFFF);
+            canvas.fill(x, y, x + 16, y + 16, DashboardTheme.HOVER);
         }
-        label(canvas, tr("inventory") + "  " + (model.page() + 1) + "/" + model.pages(), center + 4, top + 139, 164, 0x9DAFC3);
+        label(canvas, tr("inventory") + "  " + (model.page() + 1) + "/" + model.pages(), center + 4, top + 139, 164, DashboardTheme.MUTED);
         for (int i = 0; i < 36; i++) slot(canvas, center + 4 + i % 9 * 18,
                 inventoryY + (i < 27 ? i / 9 * 18 : 58));
         if (snapshot.boxes.size() > boxRows) {
             int trackTop = top + 44, trackHeight = boxRows * 18 - 2;
             int thumb = Math.max(8, trackHeight * boxRows / snapshot.boxes.size());
             int offset = (trackHeight - thumb) * boxScroll / Math.max(1, snapshot.boxes.size() - boxRows);
-            canvas.fill(center - 4, trackTop + offset, center - 2, trackTop + offset + thumb, 0xFF72B7C9);
+            canvas.fill(center - 4, trackTop + offset, center - 2, trackTop + offset + thumb, 0xFF7B9CC5);
         }
     }
 
     public static void drawButton(GuiCanvas canvas, Control control, boolean hovered) {
         boolean enabled = control.enabled.getAsBoolean();
         canvas.fill(control.x, control.y, control.x + control.width, control.y + control.height,
-                !enabled ? 0xFF1B2B3A : hovered ? 0xFF42677D : 0xFF2A4458);
+                !enabled ? DashboardTheme.BUTTON_DISABLED : hovered ? DashboardTheme.BUTTON_HOVER : DashboardTheme.BUTTON);
         String label = trim(canvas, control.label.get(), control.width - 5);
         canvas.text(label, control.x + (control.width - canvas.textWidth(label)) / 2, control.y + 4,
-                enabled ? 0xE8F2FA : 0x64768A);
+                enabled ? DashboardTheme.TEXT : DashboardTheme.TEXT_DISABLED);
     }
     private static void slot(GuiCanvas canvas, int x, int y) {
-        canvas.fill(x - 1, y - 1, x + 17, y + 17, 0xFF385064);
-        canvas.fill(x, y, x + 16, y + 16, 0xFF0C1620);
+        canvas.fill(x - 1, y - 1, x + 17, y + 17, DashboardTheme.BORDER);
+        canvas.fill(x, y, x + 16, y + 16, DashboardTheme.SLOT);
+    }
+    private static void field(GuiCanvas canvas, int x, int y, int width) {
+        canvas.fill(x, y, x + width, y + 18, DashboardTheme.BORDER);
+        canvas.fill(x + 1, y + 1, x + width - 1, y + 17, DashboardTheme.SURFACE);
     }
     private static void label(GuiCanvas canvas, String text, int x, int y, int width, int color) {
         canvas.text(trim(canvas, text, width), x, y, color);
